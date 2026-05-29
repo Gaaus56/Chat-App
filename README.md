@@ -43,3 +43,11 @@ mvn javafx:run "-Dapp.mainClass=com.chatapp.client.ClientApp"
 - Mở **Tab** chat riêng biệt: Click đúp vào một user đang online để mở một màn hình chat 1-1 riêng biệt, có thể mở nhiều Tab cùng lúc.
 - **Tương tác phím**: Hỗ trợ `Shift+Enter` để xuống dòng và `Enter` để Gửi tin nhắn.
 - Tích hợp 5 nút **Emoji** chuẩn Unicode 😃 ❤️ 👍 😂 😭 có thể ấn để chèn ngay vào TextBox chat.
+
+### Phase 4: Các tính năng Nâng cao (Trọn vẹn 3/3 điểm)
+- **Chat Nhóm (Group)**: Cho phép tạo nhóm từ danh sách những người đang online (sử dụng CheckBox để chọn nhiều người). Nhóm sẽ hiển thị trên Sidebar và hoạt động gửi/nhận như chat bình thường.
+- **Gửi File qua Socket**: Có nút "Gắn File". Khi gửi, File được chuyển hóa thành mảng Byte và gửi qua Server tới người nhận. Người nhận bấm nút Tải Xuống để chọn vị trí lưu File thông qua `FileChooser`.
+- **Lịch sử Chat & Xóa tin nhắn**: 
+    - Lịch sử trò chuyện 1-1 được tự động lưu vào bảng `messages` trong SQLite.
+    - Khi đóng mở lại ứng dụng, lịch sử cũ sẽ được tự động nạp lên lại y như cũ.
+    - Click chuột phải vào một dòng tin nhắn, bạn có thể chọn "Xóa dòng lịch sử chat" để xóa vĩnh viễn tin nhắn đó khỏi CSDL.
