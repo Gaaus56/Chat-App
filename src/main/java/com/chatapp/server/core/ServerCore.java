@@ -22,6 +22,9 @@ public class ServerCore implements Runnable {
     
     // Quản lý các ClientHandler
     public ConcurrentHashMap<String, ClientHandler> clients = new ConcurrentHashMap<>();
+    
+    // Quản lý các nhóm (Tên nhóm -> Danh sách thành viên)
+    public ConcurrentHashMap<String, List<String>> groups = new ConcurrentHashMap<>();
 
     public ServerCore(int port, ServerController controller) {
         this.port = port;

@@ -127,10 +127,28 @@ public class MainChatController {
                     }
                     break;
                 case TYPING:
-                    showTypingIndicator(msg.getSender());
+                    String tTarget = msg.getReceiver().equals(myUsername) ? msg.getSender() : msg.getReceiver();
+                    showTypingIndicator(tTarget, msg.getSender());
                     break;
                 case STOP_TYPING:
-                    hideTypingIndicator(msg.getSender());
+                    String sTarget = msg.getReceiver().equals(myUsername) ? msg.getSender() : msg.getReceiver();
+                    hideTypingIndicator(sTarget);
+                    break;
+                case GROUP_MEMBERS_RESPONSE:
+                    String gName = msg.getReceiver();
+                    @SuppressWarnings("unchecked")
+                    List<String> currentMembers = (List<String>) msg.getPayload();
+                    javafx.application.Platform.runLater(() -> showManageGroupDialog(gName, currentMembers));
+                    break;
+                case REMOVE_USER_FROM_GROUP:
+                    String removedGroup = msg.getContent();
+                    groupsList.remove(removedGroup);
+                    for (Tab t : tabPaneChats.getTabs()) {
+                        if (t.getText().equals(removedGroup)) {
+                            javafx.application.Platform.runLater(() -> tabPaneChats.getTabs().remove(t));
+                            break;
+                        }
+                    }
                     break;
                 case CHAT_HISTORY_RESPONSE:
                     String target = msg.getReceiver(); // Target của request lịch sử
@@ -215,27 +233,27 @@ public class MainChatController {
         TextArea txtInput = new TextArea();
         txtInput.setPrefRowCount(2);
         txtInput.setWrapText(true);
-        txtInput.setPromptText("Nhập tin nhắn... (Shift+Enter xuống dòng, Enter gửi)");
-        txtInput.setStyle("-fx-font-size: 14px; -fx-font-family: 'Segoe UI', sans-serif;");
+        txtInput.setPromptText("Nhập tin nhắn...");
+        // Bỏ viền và nền của TextArea để đặt vào trong box giả (ẩn luôn focus màu xanh mặc định)
+        txtInput.setStyle("-fx-focus-color: transparent; -fx-faint-focus-color: transparent; -fx-control-inner-background: transparent; -fx-background-color: transparent; -fx-border-color: transparent; -fx-background-insets: 0; -fx-padding: 5; -fx-font-size: 14px; -fx-font-family: 'Segoe UI', sans-serif; -fx-text-fill: black;");
         
         for (String e : emojis) {
             Button btn = new Button(e);
             // Sử dụng Font Emoji chuyên dụng của Windows/Mac để hiển thị màu sắc
             btn.setStyle("-fx-font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji'; -fx-font-size: 20px; -fx-background-color: transparent; -fx-cursor: hand;");
+            btn.setMinSize(Button.USE_PREF_SIZE, Button.USE_PREF_SIZE);
             btn.setOnAction(ev -> txtInput.appendText(e));
             emojiBox.getChildren().add(btn);
         }
         
-        // Tính năng Đang soạn tin... (chỉ dùng cho chat 1-1)
-        if (!isGroup) {
-            txtInput.textProperty().addListener((obs, oldText, newText) -> {
-                if (!newText.isEmpty() && oldText.isEmpty()) {
-                    clientCore.sendMessage(new Message(MessageType.TYPING, myUsername, target, ""));
-                } else if (newText.isEmpty() && !oldText.isEmpty()) {
-                    clientCore.sendMessage(new Message(MessageType.STOP_TYPING, myUsername, target, ""));
-                }
-            });
-        }
+        // Tính năng Đang soạn tin... (Cho cả chat 1-1 và Group)
+        txtInput.textProperty().addListener((obs, oldText, newText) -> {
+            if (!newText.isEmpty() && oldText.isEmpty()) {
+                clientCore.sendMessage(new Message(MessageType.TYPING, myUsername, target, ""));
+            } else if (newText.isEmpty() && !oldText.isEmpty()) {
+                clientCore.sendMessage(new Message(MessageType.STOP_TYPING, myUsername, target, ""));
+            }
+        });
         
         // Tính năng Shift+Enter xuống dòng, Enter gửi tin nhắn
         txtInput.setOnKeyPressed(event -> {
@@ -249,13 +267,23 @@ public class MainChatController {
             }
         });
         
-        Button btnSend = new Button("Gửi");
-        btnSend.setMinWidth(60);
-        btnSend.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand;");
+        Button btnSend = new Button("➤");
+        btnSend.setTooltip(new Tooltip("Gửi tin nhắn"));
+        btnSend.setStyle("-fx-background-color: transparent; -fx-text-fill: #0084ff; -fx-font-size: 24px; -fx-cursor: hand; -fx-padding: 0 10 5 0;");
+        btnSend.setMinSize(Button.USE_PREF_SIZE, Button.USE_PREF_SIZE);
         btnSend.setOnAction(ev -> sendChatMessage(target, txtInput, chatBox, isGroup));
         
-        Button btnFile = new Button("📎 Gửi File");
-        btnFile.setStyle("-fx-background-color: #2ecc71; -fx-text-fill: white; -fx-cursor: hand; -fx-font-weight: bold;");
+        // Box giả làm thanh nhập chữ chứa nút Gửi bên trong
+        HBox unifiedInputBox = new HBox(5, txtInput, btnSend);
+        unifiedInputBox.setAlignment(Pos.BOTTOM_RIGHT);
+        unifiedInputBox.setStyle("-fx-background-color: #f0f2f5; -fx-background-radius: 20; -fx-border-radius: 20; -fx-border-color: #ccd0d5; -fx-padding: 2;");
+        HBox.setHgrow(txtInput, Priority.ALWAYS);
+        HBox.setHgrow(unifiedInputBox, Priority.ALWAYS);
+        
+        Button btnFile = new Button("📎");
+        btnFile.setTooltip(new Tooltip("Gửi File"));
+        btnFile.setStyle("-fx-background-color: transparent; -fx-text-fill: #2ecc71; -fx-font-size: 24px; -fx-cursor: hand; -fx-padding: 0 5 5 5;");
+        btnFile.setMinSize(Button.USE_PREF_SIZE, Button.USE_PREF_SIZE);
         btnFile.setOnAction(ev -> {
             if (isGroup) {
                 Alert a = new Alert(Alert.AlertType.WARNING, "Gửi file trong nhóm đang được phát triển.");
@@ -278,10 +306,22 @@ public class MainChatController {
             }
         });
         
-        HBox inputArea = new HBox(10, btnFile, txtInput, btnSend);
-        HBox.setHgrow(txtInput, Priority.ALWAYS);
+        HBox bottomBar = new HBox(5);
+        bottomBar.setAlignment(Pos.BOTTOM_LEFT);
         
-        root.getChildren().addAll(scrollPane, emojiBox, inputArea);
+        if (isGroup) {
+            Button btnManageGroup = new Button("⚙");
+            btnManageGroup.setTooltip(new Tooltip("Quản lý nhóm"));
+            btnManageGroup.setStyle("-fx-background-color: transparent; -fx-text-fill: #9b59b6; -fx-font-size: 26px; -fx-cursor: hand; -fx-padding: 0 5 5 5;");
+            btnManageGroup.setMinSize(Button.USE_PREF_SIZE, Button.USE_PREF_SIZE);
+            btnManageGroup.setOnAction(ev -> {
+                clientCore.sendMessage(new Message(MessageType.GET_GROUP_MEMBERS, myUsername, target, ""));
+            });
+            bottomBar.getChildren().add(btnManageGroup);
+        }
+        bottomBar.getChildren().addAll(btnFile, unifiedInputBox);
+        
+        root.getChildren().addAll(scrollPane, emojiBox, bottomBar);
         tab.setContent(root);
         
         // Quản lý dọn dẹp khi đóng tab
@@ -375,32 +415,76 @@ public class MainChatController {
         ft.play();
     }
     
-    private void showTypingIndicator(String sender) {
-        VBox chatBox = chatHistories.get(sender);
-        if (chatBox != null && !typingNodes.containsKey(sender)) {
-            Label lblTyping = new Label("💬 " + sender + " đang soạn tin...");
-            lblTyping.setStyle("-fx-text-fill: #7f8c8d; -fx-font-style: italic; -fx-font-size: 13px;");
-            HBox row = new HBox(lblTyping);
+    private void showTypingIndicator(String tabName, String typingUser) {
+        VBox history = chatHistories.get(tabName);
+        if (history != null && !typingNodes.containsKey(tabName)) {
+            HBox row = new HBox();
             row.setAlignment(Pos.CENTER_LEFT);
+            Label lbl = new Label("💬 " + typingUser + " đang soạn tin...");
+            lbl.setStyle("-fx-font-style: italic; -fx-text-fill: gray;");
+            row.getChildren().add(lbl);
             
-            // Hiệu ứng Fade In cho typing
             row.setOpacity(0.0);
-            chatBox.getChildren().add(row);
+            history.getChildren().add(row);
+            typingNodes.put(tabName, row);
             
             FadeTransition ft = new FadeTransition(Duration.millis(300), row);
             ft.setToValue(1.0);
             ft.play();
-            
-            typingNodes.put(sender, row);
         }
     }
 
-    private void hideTypingIndicator(String sender) {
-        VBox chatBox = chatHistories.get(sender);
-        Node typingNode = typingNodes.remove(sender);
-        if (chatBox != null && typingNode != null) {
-            chatBox.getChildren().remove(typingNode);
+    private void hideTypingIndicator(String tabName) {
+        VBox history = chatHistories.get(tabName);
+        Node typingNode = typingNodes.remove(tabName);
+        if (history != null && typingNode != null) {
+            FadeTransition ft = new FadeTransition(Duration.millis(300), typingNode);
+            ft.setToValue(0.0);
+            ft.setOnFinished(e -> history.getChildren().remove(typingNode));
+            ft.play();
         }
+    }
+
+    private void showManageGroupDialog(String groupName, List<String> currentMembers) {
+        Dialog<List<String>> dialog = new Dialog<>();
+        dialog.setTitle("Quản lý nhóm: " + groupName);
+        dialog.setHeaderText("Thêm hoặc xóa thành viên");
+
+        ButtonType saveButtonType = new ButtonType("Lưu", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
+
+        VBox content = new VBox(10);
+        ListView<CheckBox> userChecks = new ListView<>();
+        
+        for (String user : onlineUsers) {
+            if (user.equals(myUsername)) continue;
+            CheckBox cb = new CheckBox(user);
+            if (currentMembers.contains(user)) {
+                cb.setSelected(true);
+            }
+            userChecks.getItems().add(cb);
+        }
+        
+        content.getChildren().addAll(new Label("Danh sách thành viên:"), userChecks);
+        dialog.getDialogPane().setContent(content);
+
+        dialog.setResultConverter(dialogButton -> {
+            if (dialogButton == saveButtonType) {
+                List<String> newMembers = new java.util.ArrayList<>();
+                newMembers.add(myUsername);
+                for (CheckBox cb : userChecks.getItems()) {
+                    if (cb.isSelected()) newMembers.add(cb.getText());
+                }
+                return newMembers;
+            }
+            return null;
+        });
+
+        dialog.showAndWait().ifPresent(newMembers -> {
+            Message msg = new Message(MessageType.UPDATE_GROUP_MEMBERS, myUsername, groupName, "");
+            msg.setPayload(newMembers);
+            clientCore.sendMessage(msg);
+        });
     }
 
     @FXML

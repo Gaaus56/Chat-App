@@ -88,18 +88,29 @@ public class ClientHandler implements Runnable {
         else if (msg.getType() == MessageType.GET_ONLINE_USERS) {
             serverCore.broadcastOnlineUsers();
         }
-        else if (msg.getType() == MessageType.PRIVATE_CHAT || msg.getType() == MessageType.TYPING || msg.getType() == MessageType.STOP_TYPING) {
+        else if (msg.getType() == MessageType.PRIVATE_CHAT) {
             String receiver = msg.getReceiver();
-            
-            // Nếu là gửi tin nhắn thực sự, lưu vào database
-            if (msg.getType() == MessageType.PRIVATE_CHAT) {
-                int msgId = MessageDAO.saveMessage(msg.getSender(), receiver, msg.getContent());
-                msg.setPayload(msgId); // Gửi kèm ID để Client dùng khi xóa
-            }
+            int msgId = MessageDAO.saveMessage(msg.getSender(), receiver, msg.getContent());
+            msg.setPayload(msgId);
             
             ClientHandler receiverHandler = serverCore.clients.get(receiver);
             if (receiverHandler != null) {
                 receiverHandler.sendMessage(msg);
+            }
+        }
+        else if (msg.getType() == MessageType.TYPING || msg.getType() == MessageType.STOP_TYPING) {
+            String receiver = msg.getReceiver();
+            if (serverCore.groups.containsKey(receiver)) {
+                List<String> members = serverCore.groups.get(receiver);
+                for (String member : members) {
+                    if (!member.equals(username)) {
+                        ClientHandler handler = serverCore.clients.get(member);
+                        if (handler != null) handler.sendMessage(msg);
+                    }
+                }
+            } else {
+                ClientHandler receiverHandler = serverCore.clients.get(receiver);
+                if (receiverHandler != null) receiverHandler.sendMessage(msg);
             }
         }
         else if (msg.getType() == MessageType.SEND_FILE) {
@@ -127,6 +138,37 @@ public class ClientHandler implements Runnable {
                     }
                 }
             }
+        }
+        else if (msg.getType() == MessageType.UPDATE_GROUP_MEMBERS) {
+            String groupName = msg.getReceiver();
+            List<String> newMembers = (List<String>) msg.getPayload();
+            List<String> oldMembers = serverCore.groups.get(groupName);
+            if (oldMembers != null) {
+                // Ai bị xóa khỏi nhóm
+                for (String old : oldMembers) {
+                    if (!newMembers.contains(old)) {
+                        Message rmMsg = new Message(MessageType.REMOVE_USER_FROM_GROUP, "Server", "", groupName);
+                        ClientHandler h = serverCore.clients.get(old);
+                        if (h != null) h.sendMessage(rmMsg);
+                    }
+                }
+                // Ai được thêm vào nhóm
+                for (String newMem : newMembers) {
+                    if (!oldMembers.contains(newMem)) {
+                        Message addMsg = new Message(MessageType.ADD_USER_TO_GROUP, "Server", "", groupName);
+                        ClientHandler h = serverCore.clients.get(newMem);
+                        if (h != null) h.sendMessage(addMsg);
+                    }
+                }
+                serverCore.groups.put(groupName, newMembers);
+            }
+        }
+        else if (msg.getType() == MessageType.GET_GROUP_MEMBERS) {
+            String groupName = msg.getReceiver();
+            List<String> members = serverCore.groups.get(groupName);
+            Message res = new Message(MessageType.GROUP_MEMBERS_RESPONSE, "Server", groupName, "");
+            res.setPayload(members);
+            sendMessage(res);
         }
         else if (msg.getType() == MessageType.GET_CHAT_HISTORY) {
             String targetUser = msg.getReceiver();
