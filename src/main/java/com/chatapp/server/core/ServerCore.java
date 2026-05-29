@@ -9,6 +9,10 @@ import java.net.Socket;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.List;
+import java.util.ArrayList;
+import com.chatapp.shared.Message;
+import com.chatapp.shared.MessageType;
 
 public class ServerCore implements Runnable {
     private int port;
@@ -66,12 +70,23 @@ public class ServerCore implements Runnable {
     
     public void addAuthenticatedClient(String username, ClientHandler handler) {
         clients.put(username, handler);
+        broadcastOnlineUsers();
     }
     
     public void removeClient(String username) {
         if (username != null) {
             clients.remove(username);
             controller.removeClientFromTable(username);
+            broadcastOnlineUsers();
+        }
+    }
+
+    public void broadcastOnlineUsers() {
+        List<String> userList = new ArrayList<>(clients.keySet());
+        Message msg = new Message(MessageType.ONLINE_USERS_LIST);
+        msg.setPayload(userList);
+        for (ClientHandler handler : clients.values()) {
+            handler.sendMessage(msg);
         }
     }
 }

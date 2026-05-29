@@ -37,3 +37,9 @@ mvn javafx:run "-Dapp.mainClass=com.chatapp.client.ClientApp"
 - Giao diện Đăng nhập / Đăng ký hiện đại, tinh gọn.
 - Mã hóa dữ liệu truyền tải thông qua Socket (`ObjectOutputStream`).
 - Phía Server sử dụng `UserDAO` để tương tác trực tiếp với CSDL SQLite (bảng `users`) kiểm tra tài khoản hợp lệ, và không cho phép đăng nhập 1 tài khoản trên 2 nơi cùng lúc.
+
+### Phase 3: Giao diện Chat cốt lõi & UX (Trọn vẹn 3/3 điểm)
+- **Main Chat GUI** với `TabPane`: Danh sách user online cập nhật Real-time (Thời gian thực).
+- Mở **Tab** chat riêng biệt: Click đúp vào một user đang online để mở một màn hình chat 1-1 riêng biệt, có thể mở nhiều Tab cùng lúc.
+- **Tương tác phím**: Hỗ trợ `Shift+Enter` để xuống dòng và `Enter` để Gửi tin nhắn.
+- Tích hợp 5 nút **Emoji** chuẩn Unicode 😃 ❤️ 👍 😂 😭 có thể ấn để chèn ngay vào TextBox chat.

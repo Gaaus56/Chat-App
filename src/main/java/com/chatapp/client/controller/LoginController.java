@@ -7,6 +7,10 @@ import com.chatapp.shared.MessageType;
 
 import javafx.application.Platform;
 import javafx.fxml.FXML;
+import javafx.fxml.FXMLLoader;
+import javafx.scene.Parent;
+import javafx.scene.Scene;
+import javafx.stage.Stage;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
@@ -69,7 +73,7 @@ public class LoginController {
         Platform.runLater(() -> {
             switch (msg.getType()) {
                 case LOGIN_SUCCESS:
-                    showAlert("Thành công", "Đăng nhập thành công! (Chuẩn bị mở màn hình Chat ở Phase 3)");
+                    openMainChat();
                     break;
                 case LOGIN_FAIL:
                     showAlert("Thất bại", msg.getContent() != null ? msg.getContent() : "Đăng nhập thất bại!");
@@ -82,6 +86,23 @@ public class LoginController {
                     break;
             }
         });
+    }
+
+    private void openMainChat() {
+        try {
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("/com/chatapp/client/MainChatView.fxml"));
+            Parent root = loader.load();
+            
+            MainChatController controller = loader.getController();
+            controller.initData(clientCore, txtUsername.getText().trim());
+            
+            Stage stage = (Stage) lblServerInfo.getScene().getWindow();
+            stage.setTitle("Chat App - Xin chào " + txtUsername.getText().trim());
+            stage.setScene(new Scene(root, 800, 600));
+        } catch (Exception e) {
+            e.printStackTrace();
+            showAlert("Lỗi", "Không thể mở giao diện Chat: " + e.getMessage());
+        }
     }
 
     private void showAlert(String title, String content) {

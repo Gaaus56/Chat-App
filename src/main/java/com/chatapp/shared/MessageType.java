@@ -16,5 +16,7 @@ public enum MessageType {
     ADD_USER_TO_GROUP,
     GET_GROUPS,
     GROUPS_LIST,
-    SEND_FILE
+    SEND_FILE,
+    TYPING,
+    STOP_TYPING
 }

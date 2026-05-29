@@ -83,6 +83,16 @@ public class ClientHandler implements Runnable {
                 sendMessage(res);
             }
         }
+        else if (msg.getType() == MessageType.GET_ONLINE_USERS) {
+            serverCore.broadcastOnlineUsers();
+        }
+        else if (msg.getType() == MessageType.PRIVATE_CHAT || msg.getType() == MessageType.TYPING || msg.getType() == MessageType.STOP_TYPING) {
+            String receiver = msg.getReceiver();
+            ClientHandler receiverHandler = serverCore.clients.get(receiver);
+            if (receiverHandler != null) {
+                receiverHandler.sendMessage(msg);
+            }
+        }
         else if (msg.getType() == MessageType.LOGOUT) {
             closeConnection();
         }
