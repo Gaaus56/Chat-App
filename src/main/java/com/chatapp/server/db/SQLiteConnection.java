@@ -20,6 +20,14 @@ public class SQLiteConnection {
                          "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
                          "username TEXT UNIQUE NOT NULL, " +
                          "password TEXT NOT NULL)");
+                         
+            // Tạo bảng messages
+            stmt.execute("CREATE TABLE IF NOT EXISTS messages (" +
+                         "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                         "sender TEXT NOT NULL, " +
+                         "receiver TEXT NOT NULL, " +
+                         "content TEXT NOT NULL, " +
+                         "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)");
             System.out.println("Khởi tạo CSDL hoàn tất.");
         } catch (Exception e) {
             e.printStackTrace();

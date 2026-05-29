@@ -7,6 +7,13 @@
         <VBox spacing="10" prefWidth="200" style="-fx-padding: 10; -fx-background-color: #ecf0f1; -fx-border-color: #bdc3c7; -fx-border-width: 0 1 0 0;">
             <Label text="Thành Viên Online" style="-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: #2c3e50;"/>
             <ListView fx:id="listOnlineUsers" VBox.vgrow="ALWAYS" style="-fx-background-color: white; -fx-background-radius: 5;"/>
+            
+            <HBox alignment="CENTER_LEFT" spacing="10">
+                <Label text="Nhóm Chat" style="-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: #2c3e50;"/>
+                <Button text="+" onAction="#handleCreateGroup" style="-fx-background-color: #2ecc71; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand; -fx-padding: 2 6;"/>
+            </HBox>
+            <ListView fx:id="listGroups" VBox.vgrow="ALWAYS" style="-fx-background-color: white; -fx-background-radius: 5;"/>
+            
             <Button text="Đăng Xuất" onAction="#handleLogout" maxWidth="Infinity" style="-fx-background-color: #e74c3c; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand;"/>
         </VBox>
     </left>

@@ -89,4 +89,16 @@ public class ServerCore implements Runnable {
             handler.sendMessage(msg);
         }
     }
+
+    public void createGroup(String groupName, List<String> members) {
+        groups.put(groupName, members);
+        Message msg = new Message(MessageType.ADD_USER_TO_GROUP, "Server", "", groupName);
+        msg.setPayload(members);
+        for (String member : members) {
+            ClientHandler handler = clients.get(member);
+            if (handler != null) {
+                handler.sendMessage(msg);
+            }
+        }
+    }
 }

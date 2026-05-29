@@ -1,6 +1,8 @@
 package com.chatapp.server.core;
 
 import com.chatapp.server.controller.ServerController;
+import com.chatapp.server.dao.MessageDAO;
+import com.chatapp.server.dao.UserDAO;
 import com.chatapp.shared.Message;
 import com.chatapp.shared.MessageType;
 
@@ -8,7 +10,7 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
-import com.chatapp.server.dao.UserDAO;
+import java.util.List;
 
 public class ClientHandler implements Runnable {
     private Socket socket;
@@ -88,10 +90,54 @@ public class ClientHandler implements Runnable {
         }
         else if (msg.getType() == MessageType.PRIVATE_CHAT || msg.getType() == MessageType.TYPING || msg.getType() == MessageType.STOP_TYPING) {
             String receiver = msg.getReceiver();
+            
+            // Nếu là gửi tin nhắn thực sự, lưu vào database
+            if (msg.getType() == MessageType.PRIVATE_CHAT) {
+                int msgId = MessageDAO.saveMessage(msg.getSender(), receiver, msg.getContent());
+                msg.setPayload(msgId); // Gửi kèm ID để Client dùng khi xóa
+            }
+            
             ClientHandler receiverHandler = serverCore.clients.get(receiver);
             if (receiverHandler != null) {
                 receiverHandler.sendMessage(msg);
             }
+        }
+        else if (msg.getType() == MessageType.SEND_FILE) {
+            String receiver = msg.getReceiver();
+            ClientHandler receiverHandler = serverCore.clients.get(receiver);
+            if (receiverHandler != null) {
+                receiverHandler.sendMessage(msg);
+            }
+        }
+        else if (msg.getType() == MessageType.CREATE_GROUP) {
+            String groupName = msg.getContent();
+            List<String> members = (List<String>) msg.getPayload();
+            serverCore.createGroup(groupName, members);
+        }
+        else if (msg.getType() == MessageType.GROUP_CHAT) {
+            String groupName = msg.getReceiver();
+            List<String> members = serverCore.groups.get(groupName);
+            if (members != null) {
+                for (String member : members) {
+                    if (!member.equals(username)) { // Không gửi lại cho người gửi
+                        ClientHandler handler = serverCore.clients.get(member);
+                        if (handler != null) {
+                            handler.sendMessage(msg);
+                        }
+                    }
+                }
+            }
+        }
+        else if (msg.getType() == MessageType.GET_CHAT_HISTORY) {
+            String targetUser = msg.getReceiver();
+            List<Message> history = MessageDAO.getChatHistory(username, targetUser);
+            Message res = new Message(MessageType.CHAT_HISTORY_RESPONSE, username, targetUser, "");
+            res.setPayload(history);
+            sendMessage(res);
+        }
+        else if (msg.getType() == MessageType.DELETE_MESSAGE) {
+            int msgId = (Integer) msg.getPayload();
+            MessageDAO.deleteMessage(msgId);
         }
         else if (msg.getType() == MessageType.LOGOUT) {
             closeConnection();

@@ -23,7 +23,15 @@ import javafx.util.Duration;
 import javafx.scene.text.Text;
 import javafx.scene.text.TextFlow;
 import javafx.scene.paint.Color;
+import javafx.stage.FileChooser;
+import javafx.scene.control.Dialog;
+import javafx.scene.control.CheckBox;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.ButtonBar;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,11 +40,13 @@ import java.util.regex.Pattern;
 
 public class MainChatController {
     @FXML private ListView<String> listOnlineUsers;
+    @FXML private ListView<String> listGroups;
     @FXML private TabPane tabPaneChats;
 
     private ClientCore clientCore;
     private String myUsername;
     private ObservableList<String> onlineUsers = FXCollections.observableArrayList();
+    private ObservableList<String> groupsList = FXCollections.observableArrayList();
     private Map<String, VBox> chatHistories = new HashMap<>();
     private Map<String, Node> typingNodes = new HashMap<>(); // Chứa bong bóng 'đang gõ...'
 
@@ -45,6 +55,7 @@ public class MainChatController {
         this.myUsername = myUsername;
         
         listOnlineUsers.setItems(onlineUsers);
+        listGroups.setItems(groupsList);
         
         // Nhận gói tin mới cho Màn hình Chat
         clientCore.setOnMessageReceived(this::handleServerMessage);
@@ -57,7 +68,17 @@ public class MainChatController {
             if (event.getClickCount() == 1) {
                 String selectedUser = listOnlineUsers.getSelectionModel().getSelectedItem();
                 if (selectedUser != null && !selectedUser.equals(myUsername)) {
-                    openChatTab(selectedUser);
+                    openChatTab(selectedUser, false);
+                }
+            }
+        });
+        
+        // Bắt sự kiện click vào nhóm
+        listGroups.setOnMouseClicked(event -> {
+            if (event.getClickCount() == 1) {
+                String selectedGroup = listGroups.getSelectionModel().getSelectedItem();
+                if (selectedGroup != null) {
+                    openChatTab(selectedGroup, true);
                 }
             }
         });
@@ -78,11 +99,31 @@ public class MainChatController {
                     break;
                 case PRIVATE_CHAT:
                     String sender = msg.getSender();
-                    openChatTab(sender); // Nếu chưa mở tab thì tự động mở
+                    openChatTab(sender, false);
                     VBox history = chatHistories.get(sender);
                     if (history != null) {
-                        hideTypingIndicator(sender); // Ẩn bong bóng đang gõ đi
-                        addMessageBubble(history, msg.getContent(), false);
+                        hideTypingIndicator(sender);
+                        
+                        int msgId = -1;
+                        if (msg.getPayload() != null && msg.getPayload() instanceof Integer) {
+                            msgId = (Integer) msg.getPayload();
+                        }
+                        
+                        addMessageBubble(history, msg.getContent(), false, msgId, sender);
+                    }
+                    break;
+                case GROUP_CHAT:
+                    String targetGroup = msg.getReceiver();
+                    openChatTab(targetGroup, true);
+                    VBox gHistory = chatHistories.get(targetGroup);
+                    if (gHistory != null) {
+                        addMessageBubble(gHistory, msg.getSender() + ": " + msg.getContent(), false, -1, targetGroup);
+                    }
+                    break;
+                case ADD_USER_TO_GROUP:
+                    String groupName = msg.getContent();
+                    if (!groupsList.contains(groupName)) {
+                        groupsList.add(groupName);
                     }
                     break;
                 case TYPING:
@@ -91,23 +132,68 @@ public class MainChatController {
                 case STOP_TYPING:
                     hideTypingIndicator(msg.getSender());
                     break;
+                case CHAT_HISTORY_RESPONSE:
+                    String target = msg.getReceiver(); // Target của request lịch sử
+                    VBox targetChatBox = chatHistories.get(target);
+                    if (targetChatBox != null) {
+                        targetChatBox.getChildren().clear();
+                        @SuppressWarnings("unchecked")
+                        List<Message> hist = (List<Message>) msg.getPayload();
+                        for (Message hMsg : hist) {
+                            boolean isMine = hMsg.getSender().equals(myUsername);
+                            int hMsgId = hMsg.getPayload() != null ? (Integer) hMsg.getPayload() : -1;
+                            addMessageBubble(targetChatBox, hMsg.getContent(), isMine, hMsgId, target);
+                        }
+                    }
+                    break;
+                case SEND_FILE:
+                    String senderFile = msg.getSender();
+                    openChatTab(senderFile, false);
+                    VBox boxFile = chatHistories.get(senderFile);
+                    if (boxFile != null) {
+                        String fileName = msg.getContent();
+                        byte[] fileBytes = (byte[]) msg.getPayload();
+                        
+                        Button btnDownload = new Button("📥 Tải xuống: " + fileName);
+                        btnDownload.setStyle("-fx-background-color: #f39c12; -fx-text-fill: white; -fx-cursor: hand; -fx-font-weight: bold;");
+                        btnDownload.setOnAction(e -> {
+                            FileChooser saveChooser = new FileChooser();
+                            saveChooser.setInitialFileName(fileName);
+                            File saveFile = saveChooser.showSaveDialog(tabPaneChats.getScene().getWindow());
+                            if (saveFile != null) {
+                                try (FileOutputStream fos = new FileOutputStream(saveFile)) {
+                                    fos.write(fileBytes);
+                                    Alert a = new Alert(Alert.AlertType.INFORMATION, "Đã tải xong file vào: " + saveFile.getAbsolutePath());
+                                    a.setHeaderText(null);
+                                    a.show();
+                                } catch (Exception ex) {
+                                    ex.printStackTrace();
+                                }
+                            }
+                        });
+                        
+                        HBox rowFile = new HBox(btnDownload);
+                        rowFile.setAlignment(Pos.CENTER_LEFT);
+                        boxFile.getChildren().add(rowFile);
+                    }
+                    break;
                 default:
                     break;
             }
         });
     }
 
-    private void openChatTab(String targetUser) {
-        // Nếu đã có tab của người này thì focus vào nó
+    private void openChatTab(String target, boolean isGroup) {
+        // Nếu đã có tab của người/nhóm này thì focus vào nó
         for (Tab t : tabPaneChats.getTabs()) {
-            if (t.getText().equals(targetUser)) {
+            if (t.getText().equals(target)) {
                 tabPaneChats.getSelectionModel().select(t);
                 return;
             }
         }
 
         // Tạo giao diện cho Tab mới
-        Tab tab = new Tab(targetUser);
+        Tab tab = new Tab(target);
         VBox root = new VBox(10);
         root.setStyle("-fx-padding: 10; -fx-background-color: #ffffff;");
         
@@ -140,14 +226,16 @@ public class MainChatController {
             emojiBox.getChildren().add(btn);
         }
         
-        // Tính năng Đang soạn tin...
-        txtInput.textProperty().addListener((obs, oldText, newText) -> {
-            if (!newText.isEmpty() && oldText.isEmpty()) {
-                clientCore.sendMessage(new Message(MessageType.TYPING, myUsername, targetUser, ""));
-            } else if (newText.isEmpty() && !oldText.isEmpty()) {
-                clientCore.sendMessage(new Message(MessageType.STOP_TYPING, myUsername, targetUser, ""));
-            }
-        });
+        // Tính năng Đang soạn tin... (chỉ dùng cho chat 1-1)
+        if (!isGroup) {
+            txtInput.textProperty().addListener((obs, oldText, newText) -> {
+                if (!newText.isEmpty() && oldText.isEmpty()) {
+                    clientCore.sendMessage(new Message(MessageType.TYPING, myUsername, target, ""));
+                } else if (newText.isEmpty() && !oldText.isEmpty()) {
+                    clientCore.sendMessage(new Message(MessageType.STOP_TYPING, myUsername, target, ""));
+                }
+            });
+        }
         
         // Tính năng Shift+Enter xuống dòng, Enter gửi tin nhắn
         txtInput.setOnKeyPressed(event -> {
@@ -156,41 +244,72 @@ public class MainChatController {
                     txtInput.appendText("\n");
                 } else {
                     event.consume(); // Ngăn tự động xuống dòng
-                    sendChatMessage(targetUser, txtInput, chatBox);
+                    sendChatMessage(target, txtInput, chatBox, isGroup);
                 }
             }
         });
         
         Button btnSend = new Button("Gửi");
-        btnSend.setMinWidth(60); // Đảm bảo nút đủ to không bị biến thành 3 chấm
+        btnSend.setMinWidth(60);
         btnSend.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand;");
-        btnSend.setOnAction(ev -> sendChatMessage(targetUser, txtInput, chatBox));
+        btnSend.setOnAction(ev -> sendChatMessage(target, txtInput, chatBox, isGroup));
         
-        HBox inputArea = new HBox(10, txtInput, btnSend);
+        Button btnFile = new Button("📎 Gửi File");
+        btnFile.setStyle("-fx-background-color: #2ecc71; -fx-text-fill: white; -fx-cursor: hand; -fx-font-weight: bold;");
+        btnFile.setOnAction(ev -> {
+            if (isGroup) {
+                Alert a = new Alert(Alert.AlertType.WARNING, "Gửi file trong nhóm đang được phát triển.");
+                a.show();
+                return;
+            }
+            FileChooser fileChooser = new FileChooser();
+            fileChooser.setTitle("Chọn file để gửi");
+            File file = fileChooser.showOpenDialog(tabPaneChats.getScene().getWindow());
+            if (file != null) {
+                try {
+                    byte[] fileBytes = Files.readAllBytes(file.toPath());
+                    Message fileMsg = new Message(MessageType.SEND_FILE, myUsername, target, file.getName());
+                    fileMsg.setPayload(fileBytes);
+                    clientCore.sendMessage(fileMsg);
+                    addMessageBubble(chatBox, "Đã gửi file: " + file.getName(), true, -1, target);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+        
+        HBox inputArea = new HBox(10, btnFile, txtInput, btnSend);
         HBox.setHgrow(txtInput, Priority.ALWAYS);
         
         root.getChildren().addAll(scrollPane, emojiBox, inputArea);
         tab.setContent(root);
         
         // Quản lý dọn dẹp khi đóng tab
-        tab.setOnClosed(e -> chatHistories.remove(targetUser));
-        chatHistories.put(targetUser, chatBox);
+        tab.setOnClosed(e -> chatHistories.remove(target));
+        chatHistories.put(target, chatBox);
         
         tabPaneChats.getTabs().add(tab);
         tabPaneChats.getSelectionModel().select(tab);
+        
+        // Gửi yêu cầu lấy lịch sử chat (chỉ cho chat riêng)
+        if (!isGroup) {
+            clientCore.sendMessage(new Message(MessageType.GET_CHAT_HISTORY, myUsername, target, ""));
+        }
     }
 
-    private void sendChatMessage(String targetUser, TextArea txtInput, VBox chatBox) {
+    private void sendChatMessage(String target, TextArea txtInput, VBox chatBox, boolean isGroup) {
         String content = txtInput.getText().trim();
         if (!content.isEmpty()) {
-            Message msg = new Message(MessageType.PRIVATE_CHAT, myUsername, targetUser, content);
+            MessageType type = isGroup ? MessageType.GROUP_CHAT : MessageType.PRIVATE_CHAT;
+            Message msg = new Message(type, myUsername, target, content);
             clientCore.sendMessage(msg);
-            addMessageBubble(chatBox, content, true);
+            // Tin nhắn vừa gửi đi chưa có ID trong DB (msgId = -1)
+            addMessageBubble(chatBox, content, true, -1, target);
             txtInput.clear();
         }
     }
 
-    private void addMessageBubble(VBox chatBox, String text, boolean isMine) {
+    private void addMessageBubble(VBox chatBox, String text, boolean isMine, int msgId, String targetUser) {
         TextFlow textFlow = new TextFlow();
         
         // Regex nhận diện Emoji (kể cả trái tim nguyên chuẩn)
@@ -230,6 +349,23 @@ public class MainChatController {
         HBox row = new HBox(bubble);
         row.setAlignment(isMine ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
         
+        // Menu xóa dòng lịch sử (ContextMenu)
+        ContextMenu contextMenu = new ContextMenu();
+        MenuItem deleteItem = new MenuItem("Xóa dòng lịch sử chat");
+        deleteItem.setOnAction(e -> {
+            if (msgId != -1) {
+                Message delMsg = new Message(MessageType.DELETE_MESSAGE, myUsername, targetUser, "");
+                delMsg.setPayload(msgId);
+                clientCore.sendMessage(delMsg);
+            }
+            chatBox.getChildren().remove(row);
+        });
+        contextMenu.getItems().add(deleteItem);
+        
+        row.setOnContextMenuRequested(e -> {
+            contextMenu.show(row, e.getScreenX(), e.getScreenY());
+        });
+        
         // Hiệu ứng Fade In (mượt mà)
         row.setOpacity(0.0);
         chatBox.getChildren().add(row);
@@ -265,6 +401,51 @@ public class MainChatController {
         if (chatBox != null && typingNode != null) {
             chatBox.getChildren().remove(typingNode);
         }
+    }
+
+    @FXML
+    private void handleCreateGroup() {
+        Dialog<String> dialog = new Dialog<>();
+        dialog.setTitle("Tạo Nhóm Mới");
+        dialog.setHeaderText("Đặt tên nhóm và chọn thành viên");
+
+        ButtonType createButtonType = new ButtonType("Tạo", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(createButtonType, ButtonType.CANCEL);
+
+        VBox content = new VBox(10);
+        TextField txtGroupName = new TextField();
+        txtGroupName.setPromptText("Nhập tên nhóm...");
+        
+        ListView<CheckBox> userChecks = new ListView<>();
+        for (String user : onlineUsers) {
+            CheckBox cb = new CheckBox(user);
+            userChecks.getItems().add(cb);
+        }
+        
+        content.getChildren().addAll(new Label("Tên nhóm:"), txtGroupName, new Label("Thành viên:"), userChecks);
+        dialog.getDialogPane().setContent(content);
+
+        dialog.setResultConverter(dialogButton -> {
+            if (dialogButton == createButtonType) {
+                return txtGroupName.getText();
+            }
+            return null;
+        });
+
+        dialog.showAndWait().ifPresent(groupName -> {
+            if (!groupName.trim().isEmpty()) {
+                List<String> members = new java.util.ArrayList<>();
+                members.add(myUsername);
+                for (CheckBox cb : userChecks.getItems()) {
+                    if (cb.isSelected()) members.add(cb.getText());
+                }
+                if (members.size() > 1) {
+                    Message msg = new Message(MessageType.CREATE_GROUP, myUsername, "", groupName);
+                    msg.setPayload(members);
+                    clientCore.sendMessage(msg);
+                }
+            }
+        });
     }
 
     @FXML

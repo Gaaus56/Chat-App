@@ -18,5 +18,8 @@ public enum MessageType {
     GROUPS_LIST,
     SEND_FILE,
     TYPING,
-    STOP_TYPING
+    STOP_TYPING,
+    GET_CHAT_HISTORY,
+    CHAT_HISTORY_RESPONSE,
+    DELETE_MESSAGE
 }
