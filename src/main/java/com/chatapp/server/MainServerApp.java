@@ -10,6 +10,9 @@ public class MainServerApp extends Application {
 
     @Override
     public void start(Stage primaryStage) throws Exception {
+        // Khởi tạo Database ngay khi bật Server
+        com.chatapp.server.db.SQLiteConnection.initialize();
+        
         // Tải giao diện FXML
         FXMLLoader loader = new FXMLLoader(getClass().getResource("/com/chatapp/server/ServerView.fxml"));
         Parent root = loader.load();

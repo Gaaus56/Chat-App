@@ -8,12 +8,14 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
+import com.chatapp.server.dao.UserDAO;
 
 public class ClientHandler implements Runnable {
     private Socket socket;
     private ServerCore serverCore;
     private String ip;
     private ServerController controller;
+    private UserDAO userDAO;
     
     private ObjectOutputStream out;
     private ObjectInputStream in;
@@ -24,6 +26,7 @@ public class ClientHandler implements Runnable {
         this.serverCore = serverCore;
         this.ip = ip;
         this.controller = controller;
+        this.userDAO = new UserDAO();
     }
 
     @Override
@@ -44,19 +47,41 @@ public class ClientHandler implements Runnable {
     }
 
     private void handleMessage(Message msg) {
-        // Tạm thời ở Phase 1 chỉ mock tính năng Đăng nhập để test TableView
-        if (msg.getType() == MessageType.LOGIN) {
+        if (msg.getType() == MessageType.REGISTER) {
             String[] credentials = (String[]) msg.getPayload();
-            this.username = credentials[0]; // Lấy username
+            boolean success = userDAO.register(credentials[0], credentials[1]);
+            if (success) {
+                sendMessage(new Message(MessageType.REGISTER_SUCCESS));
+            } else {
+                Message res = new Message(MessageType.REGISTER_FAIL);
+                res.setContent("Tài khoản đã tồn tại hoặc có lỗi!");
+                sendMessage(res);
+            }
+        }
+        else if (msg.getType() == MessageType.LOGIN) {
+            String[] credentials = (String[]) msg.getPayload();
+            String reqUsername = credentials[0];
             
-            // Đưa vào danh sách client chính thức
-            serverCore.addAuthenticatedClient(username, this);
+            // Kiểm tra xem đã online chưa
+            if (serverCore.clients.containsKey(reqUsername)) {
+                Message res = new Message(MessageType.LOGIN_FAIL);
+                res.setContent("Tài khoản này đang được đăng nhập ở nơi khác!");
+                sendMessage(res);
+                return;
+            }
             
-            // Cập nhật lại tên trên Giao diện TableView
-            controller.updateClientUsername(ip, username);
+            boolean success = userDAO.login(reqUsername, credentials[1]);
             
-            // Báo lại client thành công (Dummy)
-            sendMessage(new Message(MessageType.LOGIN_SUCCESS));
+            if (success) {
+                this.username = reqUsername;
+                serverCore.addAuthenticatedClient(username, this);
+                controller.updateClientUsername(ip, username);
+                sendMessage(new Message(MessageType.LOGIN_SUCCESS));
+            } else {
+                Message res = new Message(MessageType.LOGIN_FAIL);
+                res.setContent("Sai tài khoản hoặc mật khẩu!");
+                sendMessage(res);
+            }
         }
         else if (msg.getType() == MessageType.LOGOUT) {
             closeConnection();

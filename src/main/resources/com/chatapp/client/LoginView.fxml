@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.chatapp.client.controller.LoginController" 
+      alignment="CENTER" spacing="15" style="-fx-font-family: 'Segoe UI'; -fx-background-color: #ffffff;">
+    <padding>
+        <Insets top="30" right="40" bottom="30" left="40"/>
+    </padding>
+
+    <Label text="ĐĂNG NHẬP" style="-fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: #34495e;"/>
+    
+    <Label fx:id="lblServerInfo" text="Đang kết nối tới: ..." style="-fx-text-fill: #7f8c8d;"/>
+
+    <VBox spacing="5" alignment="CENTER_LEFT">
+        <Label text="Tài khoản:" style="-fx-font-weight: bold;"/>
+        <TextField fx:id="txtUsername" promptText="Nhập tài khoản..."/>
+    </VBox>
+    
+    <VBox spacing="5" alignment="CENTER_LEFT">
+        <Label text="Mật khẩu:" style="-fx-font-weight: bold;"/>
+        <PasswordField fx:id="txtPassword" promptText="Nhập mật khẩu..."/>
+    </VBox>
+
+    <HBox spacing="20" alignment="CENTER">
+        <Button text="Đăng Ký" onAction="#handleRegister" style="-fx-background-color: #ecf0f1; -fx-text-fill: #2c3e50; -fx-cursor: hand;"/>
+        <Button text="Đăng Nhập" onAction="#handleLogin" style="-fx-background-color: #2ecc71; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand;"/>
+    </HBox>
+</VBox>

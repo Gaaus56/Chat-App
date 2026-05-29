@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.chatapp.client.controller.ConfigController" style="-fx-font-family: 'Segoe UI'; -fx-background-color: #f4f6f9;">
+    <top>
+        <Label text="QUẢN LÝ MÁY CHỦ" style="-fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: #2c3e50;" BorderPane.alignment="CENTER">
+            <padding>
+                <Insets top="15" bottom="10"/>
+            </padding>
+        </Label>
+    </top>
+    <center>
+        <VBox spacing="10" style="-fx-padding: 15;">
+            <ListView fx:id="listServers" prefHeight="200"/>
+            <HBox spacing="10" alignment="CENTER_LEFT">
+                <TextField fx:id="txtName" promptText="Tên gợi nhớ" prefWidth="120"/>
+                <TextField fx:id="txtIp" promptText="IP Address" prefWidth="120"/>
+                <TextField fx:id="txtPort" promptText="Port" prefWidth="70"/>
+            </HBox>
+            <HBox spacing="10" alignment="CENTER">
+                <Button text="➕ Thêm" onAction="#handleAdd" style="-fx-background-color: #3498db; -fx-text-fill: white; -fx-cursor: hand;"/>
+                <Button text="✏️ Sửa" onAction="#handleEdit" style="-fx-background-color: #f39c12; -fx-text-fill: white; -fx-cursor: hand;"/>
+                <Button text="🗑 Xóa" onAction="#handleDelete" style="-fx-background-color: #e74c3c; -fx-text-fill: white; -fx-cursor: hand;"/>
+            </HBox>
+        </VBox>
+    </center>
+    <bottom>
+        <HBox alignment="CENTER" style="-fx-padding: 15;">
+            <Button text="Kết Nối Tới Server" onAction="#handleConnect" style="-fx-background-color: #2ecc71; -fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 14px; -fx-padding: 10 20; -fx-cursor: hand;"/>
+        </HBox>
+    </bottom>
+</BorderPane>
