@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.text.Font?>
+
+<BorderPane xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.chatapp.server.controller.ServerController" styleClass="root-pane">
+    <top>
+        <VBox alignment="CENTER" spacing="10" styleClass="header-box">
+            <Label text="SERVER DASHBOARD" styleClass="header-title"/>
+            <HBox alignment="CENTER" spacing="15">
+                <Label text="Port:" styleClass="config-label"/>
+                <TextField fx:id="txtPort" text="9999" prefWidth="100"/>
+                <Button fx:id="btnStart" text="▶ Khởi động Server" styleClass="btn-start" onAction="#handleStartServer"/>
+                <Button fx:id="btnStop" text="⏹ Tắt Server" styleClass="btn-stop" disable="true" onAction="#handleStopServer"/>
+            </HBox>
+            <Label fx:id="lblStatus" text="Trạng thái: Đã dừng" styleClass="status-stopped"/>
+            <padding>
+                <Insets top="20" right="20" bottom="20" left="20"/>
+            </padding>
+        </VBox>
+    </top>
+    <center>
+        <VBox spacing="10" styleClass="content-box">
+            <Label text="Danh sách Client Đang Kết Nối" styleClass="table-title"/>
+            <TableView fx:id="tableClients" VBox.vgrow="ALWAYS">
+                <columns>
+                    <TableColumn fx:id="colIp" text="Địa chỉ IP" prefWidth="200"/>
+                    <TableColumn fx:id="colUsername" text="Tài khoản" prefWidth="250"/>
+                    <TableColumn fx:id="colConnectTime" text="Thời gian kết nối" prefWidth="250"/>
+                </columns>
+            </TableView>
+            <padding>
+                <Insets top="10" right="20" bottom="20" left="20"/>
+            </padding>
+        </VBox>
+    </center>
+</BorderPane>

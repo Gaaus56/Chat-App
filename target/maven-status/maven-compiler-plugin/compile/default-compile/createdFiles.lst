@@ -1,0 +1,7 @@
+com\chatapp\server\controller\ServerController$ClientModel.class
+com\chatapp\server\core\ServerCore.class
+com\chatapp\shared\Message.class
+com\chatapp\server\MainServerApp.class
+com\chatapp\shared\MessageType.class
+com\chatapp\server\controller\ServerController.class
+com\chatapp\server\core\ClientHandler.class

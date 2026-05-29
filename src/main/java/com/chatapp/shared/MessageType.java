@@ -1,0 +1,20 @@
+package com.chatapp.shared;
+
+public enum MessageType {
+    LOGIN,
+    LOGIN_SUCCESS,
+    LOGIN_FAIL,
+    REGISTER,
+    REGISTER_SUCCESS,
+    REGISTER_FAIL,
+    LOGOUT,
+    GET_ONLINE_USERS,
+    ONLINE_USERS_LIST,
+    PRIVATE_CHAT,
+    GROUP_CHAT,
+    CREATE_GROUP,
+    ADD_USER_TO_GROUP,
+    GET_GROUPS,
+    GROUPS_LIST,
+    SEND_FILE
+}
