@@ -113,11 +113,21 @@ public class ClientHandler implements Runnable {
                 if (receiverHandler != null) receiverHandler.sendMessage(msg);
             }
         }
-        else if (msg.getType() == MessageType.SEND_FILE) {
+        else if (msg.getType() == MessageType.SEND_FILE || msg.getType() == MessageType.VOICE_MESSAGE || msg.getType() == MessageType.WEBCAM_FRAME) {
             String receiver = msg.getReceiver();
-            ClientHandler receiverHandler = serverCore.clients.get(receiver);
-            if (receiverHandler != null) {
-                receiverHandler.sendMessage(msg);
+            if (serverCore.groups.containsKey(receiver)) {
+                List<String> members = serverCore.groups.get(receiver);
+                for (String member : members) {
+                    if (!member.equals(username)) {
+                        ClientHandler handler = serverCore.clients.get(member);
+                        if (handler != null) handler.sendMessage(msg);
+                    }
+                }
+            } else {
+                ClientHandler receiverHandler = serverCore.clients.get(receiver);
+                if (receiverHandler != null) {
+                    receiverHandler.sendMessage(msg);
+                }
             }
         }
         else if (msg.getType() == MessageType.CREATE_GROUP) {

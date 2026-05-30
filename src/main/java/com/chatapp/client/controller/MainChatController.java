@@ -50,6 +50,11 @@ public class MainChatController {
     private Map<String, VBox> chatHistories = new HashMap<>();
     private Map<String, Node> typingNodes = new HashMap<>(); // Chứa bong bóng 'đang gõ...'
     
+    // Lưu trữ giao diện hiển thị Webcam
+    private Map<String, javafx.stage.Stage> videoStages = new HashMap<>();
+    private Map<String, javafx.scene.image.ImageView> videoViews = new HashMap<>();
+
+    
     // Mảng 35 Emoji được tải về
     private static final String[] ALL_EMOJIS = {
         "1f600","1f601","1f602","1f603","1f604","1f605","1f606","1f609","1f60a","1f60b",
@@ -203,6 +208,34 @@ public class MainChatController {
                         boxFile.getChildren().add(rowFile);
                     }
                     break;
+                case VOICE_MESSAGE:
+                    String senderVoice = msg.getSender();
+                    openChatTab(senderVoice, false);
+                    VBox boxVoice = chatHistories.get(senderVoice);
+                    if (boxVoice != null) {
+                        byte[] voiceBytes = (byte[]) msg.getPayload();
+                        Button btnPlay = new Button("▶ Nghe tin nhắn thoại");
+                        btnPlay.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-cursor: hand; -fx-font-weight: bold; -fx-background-radius: 15;");
+                        btnPlay.setOnAction(e -> {
+                            com.chatapp.client.media.AudioPlayer.play(voiceBytes);
+                        });
+                        HBox rowVoice = new HBox(btnPlay);
+                        rowVoice.setAlignment(Pos.CENTER_LEFT);
+                        boxVoice.getChildren().add(rowVoice);
+                    }
+                    break;
+                case WEBCAM_FRAME:
+                    String senderCam = msg.getSender();
+                    javafx.application.Platform.runLater(() -> {
+                        showVideoStage(senderCam);
+                        byte[] frameBytes = (byte[]) msg.getPayload();
+                        try {
+                            java.io.ByteArrayInputStream bis = new java.io.ByteArrayInputStream(frameBytes);
+                            javafx.scene.image.Image img = new javafx.scene.image.Image(bis);
+                            videoViews.get(senderCam).setImage(img);
+                        } catch (Exception ex) {}
+                    });
+                    break;
                 default:
                     break;
             }
@@ -344,6 +377,64 @@ public class MainChatController {
             }
         });
         
+        Button btnMic = new Button("🎤");
+        btnMic.setTooltip(new Tooltip("Nhấn giữ để ghi âm"));
+        btnMic.setStyle("-fx-background-color: transparent; -fx-text-fill: #e74c3c; -fx-font-size: 24px; -fx-cursor: hand; -fx-padding: 0 5 5 5;");
+        btnMic.setMinSize(Button.USE_PREF_SIZE, Button.USE_PREF_SIZE);
+        
+        com.chatapp.client.media.AudioRecorder[] recorder = new com.chatapp.client.media.AudioRecorder[1];
+        
+        btnMic.setOnMousePressed(ev -> {
+            btnMic.setStyle("-fx-background-color: #ffeaea; -fx-background-radius: 20; -fx-text-fill: #e74c3c; -fx-font-size: 24px; -fx-cursor: hand; -fx-padding: 0 5 5 5;");
+            recorder[0] = new com.chatapp.client.media.AudioRecorder();
+            try {
+                recorder[0].startRecording();
+            } catch(Exception e) {
+                e.printStackTrace();
+            }
+        });
+        
+        btnMic.setOnMouseReleased(ev -> {
+            btnMic.setStyle("-fx-background-color: transparent; -fx-text-fill: #e74c3c; -fx-font-size: 24px; -fx-cursor: hand; -fx-padding: 0 5 5 5;");
+            if (recorder[0] != null) {
+                byte[] audioData = recorder[0].stopRecording();
+                if (audioData != null && audioData.length > 0) {
+                    Message voiceMsg = new Message(MessageType.VOICE_MESSAGE, myUsername, target, "Tin nhắn thoại");
+                    voiceMsg.setPayload(audioData);
+                    clientCore.sendMessage(voiceMsg);
+                    
+                    // Hiện bong bóng Chat Audio của mình
+                    Button btnPlay = new Button("▶ Nghe tin nhắn thoại");
+                    btnPlay.setStyle("-fx-background-color: #0084ff; -fx-text-fill: white; -fx-cursor: hand; -fx-font-weight: bold; -fx-background-radius: 15; -fx-padding: 5 10;");
+                    btnPlay.setOnAction(e -> {
+                        com.chatapp.client.media.AudioPlayer.play(audioData);
+                    });
+                    HBox rowVoice = new HBox(btnPlay);
+                    rowVoice.setAlignment(Pos.CENTER_RIGHT);
+                    rowVoice.setPadding(new javafx.geometry.Insets(5, 5, 5, 50));
+                    chatBox.getChildren().add(rowVoice);
+                }
+            }
+        });
+        
+        Button btnCam = new Button("📹");
+        btnCam.setTooltip(new Tooltip("Bật/Tắt Webcam"));
+        btnCam.setStyle("-fx-background-color: transparent; -fx-text-fill: #9b59b6; -fx-font-size: 24px; -fx-cursor: hand; -fx-padding: 0 5 5 5;");
+        btnCam.setMinSize(Button.USE_PREF_SIZE, Button.USE_PREF_SIZE);
+        
+        com.chatapp.client.media.WebcamService[] webcamService = new com.chatapp.client.media.WebcamService[1];
+        btnCam.setOnAction(ev -> {
+            if (webcamService[0] == null) {
+                webcamService[0] = new com.chatapp.client.media.WebcamService();
+                webcamService[0].startStreaming(clientCore, myUsername, target);
+                btnCam.setStyle("-fx-background-color: #ffeaea; -fx-text-fill: #9b59b6; -fx-font-size: 24px; -fx-cursor: hand; -fx-padding: 0 5 5 5;");
+            } else {
+                webcamService[0].stopStreaming();
+                webcamService[0] = null;
+                btnCam.setStyle("-fx-background-color: transparent; -fx-text-fill: #9b59b6; -fx-font-size: 24px; -fx-cursor: hand; -fx-padding: 0 5 5 5;");
+            }
+        });
+        
         HBox bottomBar = new HBox(5);
         bottomBar.setAlignment(Pos.BOTTOM_LEFT);
         
@@ -357,7 +448,7 @@ public class MainChatController {
             });
             bottomBar.getChildren().add(btnManageGroup);
         }
-        bottomBar.getChildren().addAll(btnFile, pseudoInputBox, btnSend);
+        bottomBar.getChildren().addAll(btnMic, btnCam, btnFile, pseudoInputBox, btnSend);
         
         root.getChildren().addAll(scrollPane, bottomBar);
         tab.setContent(root);
@@ -375,6 +466,28 @@ public class MainChatController {
         }
     }
 
+    private void showVideoStage(String sender) {
+        if (!videoStages.containsKey(sender)) {
+            javafx.stage.Stage stage = new javafx.stage.Stage();
+            stage.setTitle("Video call với " + sender);
+            javafx.scene.image.ImageView iv = new javafx.scene.image.ImageView();
+            iv.setFitWidth(640);
+            iv.setFitHeight(480);
+            videoViews.put(sender, iv);
+            
+            VBox box = new VBox(iv);
+            box.setAlignment(Pos.CENTER);
+            box.setStyle("-fx-background-color: black;");
+            stage.setScene(new Scene(box, 640, 480));
+            stage.setOnCloseRequest(e -> {
+                videoStages.remove(sender);
+                videoViews.remove(sender);
+            });
+            videoStages.put(sender, stage);
+            stage.show();
+        }
+    }
+    
     private void sendChatMessage(String target, com.chatapp.client.richtext.EmojiTextArea txtInput, VBox chatBox, boolean isGroup) {
         String content = txtInput.getPlainTextWithEmojis();
         if (!content.isEmpty()) {

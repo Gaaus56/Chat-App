@@ -43,6 +43,12 @@
             <artifactId>richtextfx</artifactId>
             <version>0.11.2</version>
         </dependency>
+        <!-- Thư viện Webcam Capture (Phase 5) -->
+        <dependency>
+            <groupId>com.github.sarxos</groupId>
+            <artifactId>webcam-capture</artifactId>
+            <version>0.3.12</version>
+        </dependency>
     </dependencies>
 
     <build>
