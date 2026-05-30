@@ -49,6 +49,14 @@ public class MainChatController {
     private ObservableList<String> groupsList = FXCollections.observableArrayList();
     private Map<String, VBox> chatHistories = new HashMap<>();
     private Map<String, Node> typingNodes = new HashMap<>(); // Chứa bong bóng 'đang gõ...'
+    
+    // Mảng 35 Emoji được tải về
+    private static final String[] ALL_EMOJIS = {
+        "1f600","1f601","1f602","1f603","1f604","1f605","1f606","1f609","1f60a","1f60b",
+        "1f60e","1f60d","1f618","1f617","1f619","1f61a","1f642","1f914","1f610","1f611",
+        "1f636","1f644","1f60f","1f623","1f625","1f62e","1f62f","1f62a","1f62b","1f634",
+        "1f60c","1f61b","2764","1f44d","1f62d"
+    };
 
     public void initData(ClientCore clientCore, String myUsername) {
         this.clientCore = clientCore;
@@ -227,24 +235,54 @@ public class MainChatController {
         // Tự động cuộn xuống dưới cùng khi có tin mới
         chatBox.heightProperty().addListener((obs, oldVal, newVal) -> scrollPane.setVvalue(1.0));
         
-        HBox emojiBox = new HBox(10);
-        String[] emojis = {"😃", "❤️", "👍", "😂", "😭"};
-        
-        TextArea txtInput = new TextArea();
-        txtInput.setPrefRowCount(2);
-        txtInput.setWrapText(true);
-        txtInput.setPromptText("Nhập tin nhắn...");
-        // Bỏ viền và nền của TextArea để đặt vào trong box giả (ẩn luôn focus màu xanh mặc định)
+        com.chatapp.client.richtext.EmojiTextArea txtInput = new com.chatapp.client.richtext.EmojiTextArea();
+        txtInput.setPrefHeight(45);
         txtInput.setStyle("-fx-focus-color: transparent; -fx-faint-focus-color: transparent; -fx-control-inner-background: transparent; -fx-background-color: transparent; -fx-border-color: transparent; -fx-background-insets: 0; -fx-padding: 5; -fx-font-size: 14px; -fx-font-family: 'Segoe UI', sans-serif; -fx-text-fill: black;");
         
-        for (String e : emojis) {
-            Button btn = new Button(e);
-            // Sử dụng Font Emoji chuyên dụng của Windows/Mac để hiển thị màu sắc
-            btn.setStyle("-fx-font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji'; -fx-font-size: 20px; -fx-background-color: transparent; -fx-cursor: hand;");
-            btn.setMinSize(Button.USE_PREF_SIZE, Button.USE_PREF_SIZE);
-            btn.setOnAction(ev -> txtInput.appendText(e));
-            emojiBox.getChildren().add(btn);
+        javafx.stage.Popup emojiPopup = new javafx.stage.Popup();
+        emojiPopup.setAutoHide(true);
+        javafx.scene.layout.FlowPane emojiGrid = new javafx.scene.layout.FlowPane();
+        emojiGrid.setPrefWrapLength(240);
+        emojiGrid.setVgap(5); emojiGrid.setHgap(5);
+        emojiGrid.setStyle("-fx-background-color: white; -fx-padding: 10; -fx-border-color: #ccc; -fx-border-radius: 5; -fx-background-radius: 5; -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.2), 10, 0, 0, 0);");
+        
+        for(String hex : ALL_EMOJIS) {
+            String iconPath = "/com/chatapp/client/emojis/" + hex + ".png";
+            try {
+                javafx.scene.image.ImageView iv = new javafx.scene.image.ImageView(new javafx.scene.image.Image(getClass().getResourceAsStream(iconPath)));
+                iv.setFitWidth(24); iv.setFitHeight(24);
+                Button btn = new Button();
+                btn.setGraphic(iv);
+                btn.setStyle("-fx-background-color: transparent; -fx-cursor: hand; -fx-padding: 2;");
+                btn.setOnAction(ev -> {
+                    txtInput.insertEmoji(iconPath);
+                    txtInput.requestFocus();
+                    emojiPopup.hide();
+                });
+                emojiGrid.getChildren().add(btn);
+            } catch(Exception e) {}
         }
+        emojiPopup.getContent().add(emojiGrid);
+
+        Button btnEmojiToggle = new Button();
+        try {
+            javafx.scene.image.ImageView ivToggle = new javafx.scene.image.ImageView(new javafx.scene.image.Image(getClass().getResourceAsStream("/com/chatapp/client/emojis/1f600.png")));
+            ivToggle.setFitWidth(22); ivToggle.setFitHeight(22);
+            btnEmojiToggle.setGraphic(ivToggle);
+        } catch(Exception e) {
+            btnEmojiToggle.setText("😊");
+            btnEmojiToggle.setStyle("-fx-font-family: 'Segoe UI Emoji';");
+        }
+        btnEmojiToggle.setStyle(btnEmojiToggle.getStyle() + "-fx-background-color: transparent; -fx-cursor: hand; -fx-font-size: 20px; -fx-padding: 5;");
+        btnEmojiToggle.setMinSize(Button.USE_PREF_SIZE, Button.USE_PREF_SIZE); // Không cho nút bị bóp nhỏ thành 3 chấm
+        btnEmojiToggle.setOnAction(ev -> {
+            if (emojiPopup.isShowing()) {
+                emojiPopup.hide();
+            } else {
+                javafx.geometry.Bounds bounds = btnEmojiToggle.localToScreen(btnEmojiToggle.getBoundsInLocal());
+                emojiPopup.show(btnEmojiToggle, bounds.getMinX() - 200, bounds.getMinY() - 250);
+            }
+        });
         
         // Tính năng Đang soạn tin... (Cho cả chat 1-1 và Group)
         txtInput.textProperty().addListener((obs, oldText, newText) -> {
@@ -273,12 +311,12 @@ public class MainChatController {
         btnSend.setMinSize(Button.USE_PREF_SIZE, Button.USE_PREF_SIZE);
         btnSend.setOnAction(ev -> sendChatMessage(target, txtInput, chatBox, isGroup));
         
-        // Box giả làm thanh nhập chữ chứa nút Gửi bên trong
-        HBox unifiedInputBox = new HBox(5, txtInput, btnSend);
-        unifiedInputBox.setAlignment(Pos.BOTTOM_RIGHT);
-        unifiedInputBox.setStyle("-fx-background-color: #f0f2f5; -fx-background-radius: 20; -fx-border-radius: 20; -fx-border-color: #ccd0d5; -fx-padding: 2;");
+        // Box giả làm thanh nhập chữ chứa khung Text và nút Emoji bên trong
+        HBox pseudoInputBox = new HBox(5, txtInput, btnEmojiToggle);
+        pseudoInputBox.setAlignment(Pos.BOTTOM_RIGHT);
+        pseudoInputBox.setStyle("-fx-background-color: #f0f2f5; -fx-background-radius: 20; -fx-border-radius: 20; -fx-border-color: #ccd0d5; -fx-padding: 2;");
         HBox.setHgrow(txtInput, Priority.ALWAYS);
-        HBox.setHgrow(unifiedInputBox, Priority.ALWAYS);
+        HBox.setHgrow(pseudoInputBox, Priority.ALWAYS);
         
         Button btnFile = new Button("📎");
         btnFile.setTooltip(new Tooltip("Gửi File"));
@@ -319,9 +357,9 @@ public class MainChatController {
             });
             bottomBar.getChildren().add(btnManageGroup);
         }
-        bottomBar.getChildren().addAll(btnFile, unifiedInputBox);
+        bottomBar.getChildren().addAll(btnFile, pseudoInputBox, btnSend);
         
-        root.getChildren().addAll(scrollPane, emojiBox, bottomBar);
+        root.getChildren().addAll(scrollPane, bottomBar);
         tab.setContent(root);
         
         // Quản lý dọn dẹp khi đóng tab
@@ -337,8 +375,8 @@ public class MainChatController {
         }
     }
 
-    private void sendChatMessage(String target, TextArea txtInput, VBox chatBox, boolean isGroup) {
-        String content = txtInput.getText().trim();
+    private void sendChatMessage(String target, com.chatapp.client.richtext.EmojiTextArea txtInput, VBox chatBox, boolean isGroup) {
+        String content = txtInput.getPlainTextWithEmojis();
         if (!content.isEmpty()) {
             MessageType type = isGroup ? MessageType.GROUP_CHAT : MessageType.PRIVATE_CHAT;
             Message msg = new Message(type, myUsername, target, content);
@@ -352,8 +390,15 @@ public class MainChatController {
     private void addMessageBubble(VBox chatBox, String text, boolean isMine, int msgId, String targetUser) {
         TextFlow textFlow = new TextFlow();
         
-        // Regex nhận diện Emoji (kể cả trái tim nguyên chuẩn)
-        Pattern pattern = Pattern.compile("([\\uD83C-\\uDBFF\\uDC00-\\uDFFF]+|❤️)");
+        // Regex nhận diện động từ mảng ALL_EMOJIS
+        StringBuilder regexBuilder = new StringBuilder("(");
+        for (int i=0; i<ALL_EMOJIS.length; i++) {
+           if(ALL_EMOJIS[i].equals("2764")) regexBuilder.append("❤️");
+           else regexBuilder.append(new String(Character.toChars(Integer.parseInt(ALL_EMOJIS[i], 16))));
+           if(i < ALL_EMOJIS.length - 1) regexBuilder.append("|");
+        }
+        regexBuilder.append(")");
+        Pattern pattern = Pattern.compile(regexBuilder.toString());
         Matcher matcher = pattern.matcher(text);
         
         int lastEnd = 0;
@@ -365,11 +410,31 @@ public class MainChatController {
                 normalText.setFill(isMine ? Color.WHITE : Color.BLACK);
                 textFlow.getChildren().add(normalText);
             }
+            
             // Phần Emoji
-            Text emojiText = new Text(matcher.group());
-            emojiText.setStyle("-fx-font-family: 'Segoe UI Emoji', 'Apple Color Emoji'; -fx-font-size: 18px;");
-            emojiText.setFill(isMine ? Color.WHITE : Color.BLACK);
-            textFlow.getChildren().add(emojiText);
+            String emojiStr = matcher.group();
+            String iconPath = "";
+            for (String hex : ALL_EMOJIS) {
+                String eChar = hex.equals("2764") ? "❤️" : new String(Character.toChars(Integer.parseInt(hex, 16)));
+                if (eChar.equals(emojiStr)) {
+                    iconPath = "/com/chatapp/client/emojis/" + hex + ".png";
+                    break;
+                }
+            }
+            try {
+                javafx.scene.image.ImageView iv = new javafx.scene.image.ImageView(new javafx.scene.image.Image(getClass().getResourceAsStream(iconPath)));
+                iv.setFitWidth(20);
+                iv.setFitHeight(20);
+                
+                // Thủ thuật nhỏ: TextFlow cần một text rỗng để layout ImageView cho đẹp
+                Text space = new Text("\u200B"); // Zero-width space
+                textFlow.getChildren().addAll(iv, space);
+            } catch (Exception ex) {
+                // Fallback nếu thiếu ảnh
+                Text emojiText = new Text(emojiStr);
+                emojiText.setStyle("-fx-font-family: 'Segoe UI Emoji', 'Apple Color Emoji'; -fx-font-size: 18px;");
+                textFlow.getChildren().add(emojiText);
+            }
             
             lastEnd = matcher.end();
         }
