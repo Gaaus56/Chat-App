@@ -1,18 +1,14 @@
 package com.chatapp.server.dao;
-
 import com.chatapp.server.db.SQLiteConnection;
 import com.chatapp.shared.Message;
 import com.chatapp.shared.MessageType;
-
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
-
 public class MessageDAO {
-
     public static int saveMessage(String sender, String receiver, String content, MessageType type) {
         String sql = "INSERT INTO messages (sender, receiver, content, msg_type) VALUES (?, ?, ?, ?)";
         try (Connection conn = SQLiteConnection.getConnection();
@@ -22,10 +18,9 @@ public class MessageDAO {
             pstmt.setString(3, content);
             pstmt.setString(4, type.name());
             pstmt.executeUpdate();
-            
             try (ResultSet generatedKeys = pstmt.getGeneratedKeys()) {
                 if (generatedKeys.next()) {
-                    return generatedKeys.getInt(1); // Trả về ID của tin nhắn vừa lưu
+                    return generatedKeys.getInt(1); 
                 }
             }
         } catch (Exception e) {
@@ -33,7 +28,6 @@ public class MessageDAO {
         }
         return -1;
     }
-
     public static List<Message> getChatHistory(String user1, String user2, boolean isGroup) {
         List<Message> history = new ArrayList<>();
         String sql;
@@ -45,7 +39,7 @@ public class MessageDAO {
         try (Connection conn = SQLiteConnection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
             if (isGroup) {
-                pstmt.setString(1, user2); // user2 là tên group
+                pstmt.setString(1, user2); 
             } else {
                 pstmt.setString(1, user1);
                 pstmt.setString(2, user2);
@@ -59,11 +53,8 @@ public class MessageDAO {
                     typeStr = rs.getString("msg_type");
                     if (typeStr == null) typeStr = isGroup ? "GROUP_CHAT" : "PRIVATE_CHAT";
                 } catch (Exception ignore) { }
-                
                 MessageType type = MessageType.valueOf(typeStr);
                 String content = rs.getString("content");
-                
-                // Nạp payload từ file nếu là media
                 Object payload = null;
                 if (type == MessageType.SEND_FILE || type == MessageType.VOICE_MESSAGE || type == MessageType.WEBCAM_FRAME) {
                     String filePath = content;
@@ -82,12 +73,11 @@ public class MessageDAO {
                         System.out.println("Không tìm thấy file media: " + filePath);
                     }
                 }
-                
                 Message msg = new Message(type, rs.getString("sender"), rs.getString("receiver"), content);
                 if (payload != null) {
                     msg.setPayload(new Object[]{ rs.getInt("id"), payload });
                 } else {
-                    msg.setPayload(rs.getInt("id")); // Giữ lại logic cũ nếu ko có payload
+                    msg.setPayload(rs.getInt("id")); 
                 }
                 history.add(msg);
             }
@@ -96,7 +86,6 @@ public class MessageDAO {
         }
         return history;
     }
-    
     public static boolean deleteMessage(int messageId) {
         String sql = "DELETE FROM messages WHERE id = ?";
         try (Connection conn = SQLiteConnection.getConnection();

@@ -1,11 +1,8 @@
 package com.chatapp.server.dao;
-
 import com.chatapp.server.db.SQLiteConnection;
-
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-
 public class UserDAO {
     public boolean register(String username, String password) {
         String sql = "INSERT INTO users(username, password) VALUES(?, ?)";
@@ -16,11 +13,9 @@ public class UserDAO {
             pstmt.executeUpdate();
             return true;
         } catch (Exception e) {
-            // Lỗi chủ yếu do username đã tồn tại (UNIQUE constraint)
             return false;
         }
     }
-
     public boolean login(String username, String password) {
         String sql = "SELECT id FROM users WHERE username = ? AND password = ?";
         try (Connection conn = SQLiteConnection.getConnection(); 
@@ -28,13 +23,12 @@ public class UserDAO {
             pstmt.setString(1, username);
             pstmt.setString(2, password);
             ResultSet rs = pstmt.executeQuery();
-            return rs.next(); // Trả về true nếu có kết quả
+            return rs.next(); 
         } catch (Exception e) {
             e.printStackTrace();
             return false;
         }
     }
-    
     public java.util.List<String> getAllUsers() {
         java.util.List<String> users = new java.util.ArrayList<>();
         String sql = "SELECT username FROM users";
@@ -49,7 +43,6 @@ public class UserDAO {
         }
         return users;
     }
-    
     public void updateLogoutTime(String username) {
         String sql = "UPDATE users SET last_logout = CURRENT_TIMESTAMP WHERE username = ?";
         try (Connection conn = SQLiteConnection.getConnection(); 
@@ -60,11 +53,8 @@ public class UserDAO {
             e.printStackTrace();
         }
     }
-    
     public java.util.List<String> getUnreadSenders(String username, java.util.Map<String, java.util.List<String>> groups) {
         java.util.List<String> unread = new java.util.ArrayList<>();
-        // Tìm các tin nhắn được gửi đến cá nhân hoặc nhóm mà user này có mặt, 
-        // với thời gian sau lần đăng xuất cuối cùng, và người gửi không phải là chính user này.
         String sql = "SELECT DISTINCT sender, receiver FROM messages WHERE timestamp > (SELECT last_logout FROM users WHERE username = ?) AND sender != ?";
         try (Connection conn = SQLiteConnection.getConnection(); 
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -75,10 +65,8 @@ public class UserDAO {
                 String sender = rs.getString("sender");
                 String receiver = rs.getString("receiver");
                 if (receiver.equals(username)) {
-                    // Tin nhắn cá nhân
                     if (!unread.contains(sender)) unread.add(sender);
                 } else if (groups.containsKey(receiver) && groups.get(receiver).contains(username)) {
-                    // Tin nhắn nhóm
                     if (!unread.contains(receiver)) unread.add(receiver);
                 }
             }

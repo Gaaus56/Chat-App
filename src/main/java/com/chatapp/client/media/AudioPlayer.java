@@ -1,7 +1,5 @@
 package com.chatapp.client.media;
-
 import javax.sound.sampled.*;
-
 public class AudioPlayer {
     public static void play(byte[] audioData) {
         try {
@@ -10,7 +8,6 @@ public class AudioPlayer {
             SourceDataLine line = (SourceDataLine) AudioSystem.getLine(info);
             line.open(format);
             line.start();
-            
             Thread playThread = new Thread(() -> {
                 line.write(audioData, 0, audioData.length);
                 line.drain();

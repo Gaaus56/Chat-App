@@ -1,28 +1,23 @@
 package com.chatapp.server.core;
-
 import com.chatapp.server.controller.ServerController;
 import com.chatapp.server.dao.MessageDAO;
 import com.chatapp.server.dao.UserDAO;
 import com.chatapp.shared.Message;
 import com.chatapp.shared.MessageType;
-
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.util.List;
-
 public class ClientHandler implements Runnable {
     private Socket socket;
     private ServerCore serverCore;
     private String ip;
     private ServerController controller;
     private UserDAO userDAO;
-    
     private ObjectOutputStream out;
     private ObjectInputStream in;
     private String username;
-
     public ClientHandler(Socket socket, ServerCore serverCore, String ip, ServerController controller) {
         this.socket = socket;
         this.serverCore = serverCore;
@@ -30,13 +25,11 @@ public class ClientHandler implements Runnable {
         this.controller = controller;
         this.userDAO = new UserDAO();
     }
-
     @Override
     public void run() {
         try {
             out = new ObjectOutputStream(socket.getOutputStream());
             in = new ObjectInputStream(socket.getInputStream());
-
             while (true) {
                 Message message = (Message) in.readObject();
                 handleMessage(message);
@@ -47,7 +40,6 @@ public class ClientHandler implements Runnable {
             closeConnection();
         }
     }
-
     private void handleMessage(Message msg) {
         if (msg.getType() == MessageType.REGISTER) {
             String[] credentials = (String[]) msg.getPayload();
@@ -63,17 +55,13 @@ public class ClientHandler implements Runnable {
         else if (msg.getType() == MessageType.LOGIN) {
             String[] credentials = (String[]) msg.getPayload();
             String reqUsername = credentials[0];
-            
-            // Kiểm tra xem đã online chưa
             if (serverCore.clients.containsKey(reqUsername)) {
                 Message res = new Message(MessageType.LOGIN_FAIL);
                 res.setContent("Tài khoản này đang được đăng nhập ở nơi khác!");
                 sendMessage(res);
                 return;
             }
-            
             boolean success = userDAO.login(reqUsername, credentials[1]);
-            
             if (success) {
                 this.username = reqUsername;
                 serverCore.addAuthenticatedClient(username, this);
@@ -115,7 +103,6 @@ public class ClientHandler implements Runnable {
             String receiver = msg.getReceiver();
             int msgId = MessageDAO.saveMessage(msg.getSender(), receiver, msg.getContent(), msg.getType());
             msg.setPayload(msgId);
-            
             ClientHandler receiverHandler = serverCore.clients.get(receiver);
             if (receiverHandler != null) {
                 receiverHandler.sendMessage(msg);
@@ -138,8 +125,6 @@ public class ClientHandler implements Runnable {
         }
         else if (msg.getType() == MessageType.SEND_FILE || msg.getType() == MessageType.VOICE_MESSAGE || msg.getType() == MessageType.WEBCAM_FRAME) {
             String receiver = msg.getReceiver();
-            
-            // LƯU FILE RA Ổ CỨNG SERVER
             String fileName = "media_" + System.currentTimeMillis() + ".dat";
             String filePath = "server_media/" + fileName;
             try {
@@ -155,9 +140,6 @@ public class ClientHandler implements Runnable {
             } catch (Exception e) {
                 e.printStackTrace();
             }
-            
-            // LƯU ĐƯỜNG DẪN VÀO DB
-            // Đối với SEND_FILE, msg.getContent() chứa tên file gốc, ta gộp lại: originalName|filePath
             String dbContent = msg.getContent();
             if (msg.getType() == MessageType.SEND_FILE) {
                 dbContent = msg.getContent() + "|" + filePath;
@@ -166,7 +148,6 @@ public class ClientHandler implements Runnable {
             }
             int msgId = MessageDAO.saveMessage(username, receiver, dbContent, msg.getType());
             msg.setPayload(new Object[]{ msgId, msg.getPayload() }); 
-            
             if (serverCore.groups.containsKey(receiver)) {
                 List<String> members = serverCore.groups.get(receiver);
                 for (String member : members) {
@@ -191,11 +172,10 @@ public class ClientHandler implements Runnable {
             String groupName = msg.getReceiver();
             int msgId = com.chatapp.server.dao.MessageDAO.saveMessage(msg.getSender(), groupName, msg.getContent(), msg.getType());
             msg.setPayload(msgId);
-            
             List<String> members = serverCore.groups.get(groupName);
             if (members != null) {
                 for (String member : members) {
-                    if (!member.equals(username)) { // Không gửi lại cho người gửi
+                    if (!member.equals(username)) { 
                         ClientHandler handler = serverCore.clients.get(member);
                         if (handler != null) {
                             handler.sendMessage(msg);
@@ -209,7 +189,6 @@ public class ClientHandler implements Runnable {
             List<String> newMembers = (List<String>) msg.getPayload();
             List<String> oldMembers = serverCore.groups.get(groupName);
             if (oldMembers != null) {
-                // Ai bị xóa khỏi nhóm
                 for (String old : oldMembers) {
                     if (!newMembers.contains(old)) {
                         Message rmMsg = new Message(MessageType.REMOVE_USER_FROM_GROUP, "Server", "", groupName);
@@ -217,7 +196,6 @@ public class ClientHandler implements Runnable {
                         if (h != null) h.sendMessage(rmMsg);
                     }
                 }
-                // Ai được thêm vào nhóm
                 for (String newMem : newMembers) {
                     if (!oldMembers.contains(newMem)) {
                         Message addMsg = new Message(MessageType.ADD_USER_TO_GROUP, "Server", "", groupName);
@@ -240,7 +218,6 @@ public class ClientHandler implements Runnable {
             String groupName = msg.getReceiver();
             List<String> members = serverCore.groups.get(groupName);
             if (members != null) {
-                // Gửi thông báo REMOVE_USER_FROM_GROUP đến tất cả thành viên để họ tự động xóa tab
                 for (String mem : members) {
                     ClientHandler h = serverCore.clients.get(mem);
                     if (h != null) {
@@ -263,7 +240,6 @@ public class ClientHandler implements Runnable {
         else if (msg.getType() == MessageType.DELETE_MESSAGE) {
             int msgId = (Integer) msg.getPayload();
             MessageDAO.deleteMessage(msgId);
-            
             String receiver = msg.getReceiver();
             if (serverCore.groups.containsKey(receiver)) {
                 List<String> members = serverCore.groups.get(receiver);
@@ -282,7 +258,6 @@ public class ClientHandler implements Runnable {
             closeConnection();
         }
     }
-
     public void sendMessage(Message msg) {
         try {
             if (out != null) {
@@ -293,7 +268,6 @@ public class ClientHandler implements Runnable {
             closeConnection();
         }
     }
-
     public void closeConnection() {
         if (username != null) {
             userDAO.updateLogoutTime(username);

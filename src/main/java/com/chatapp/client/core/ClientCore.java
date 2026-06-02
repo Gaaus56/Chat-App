@@ -1,25 +1,20 @@
 package com.chatapp.client.core;
-
 import com.chatapp.shared.Message;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.util.function.Consumer;
-
 public class ClientCore {
     private Socket socket;
     private ObjectOutputStream out;
     private ObjectInputStream in;
     private Consumer<Message> onMessageReceived;
-    
     private Runnable onDisconnected;
     private boolean isVoluntaryClose = false;
-    
     public ClientCore(String ip, int port) throws Exception {
         socket = new Socket(ip, port);
         out = new ObjectOutputStream(socket.getOutputStream());
         in = new ObjectInputStream(socket.getInputStream());
-        
         Thread listenThread = new Thread(() -> {
             try {
                 while (true) {
@@ -37,18 +32,15 @@ public class ClientCore {
                 }
             }
         });
-        listenThread.setDaemon(true); // Đảm bảo thread tắt khi tắt app
+        listenThread.setDaemon(true); 
         listenThread.start();
     }
-    
     public void setOnMessageReceived(Consumer<Message> callback) {
         this.onMessageReceived = callback;
     }
-    
     public void setOnDisconnected(Runnable onDisconnected) {
         this.onDisconnected = onDisconnected;
     }
-    
     public void closeConnection() {
         isVoluntaryClose = true;
         try {
@@ -59,7 +51,6 @@ public class ClientCore {
             e.printStackTrace();
         }
     }
-    
     public void sendMessage(Message msg) {
         try {
             out.writeObject(msg);

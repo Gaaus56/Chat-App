@@ -1,5 +1,4 @@
 package com.chatapp.shared;
-
 public enum MessageType {
     LOGIN,
     LOGIN_SUCCESS,
@@ -31,7 +30,6 @@ public enum MessageType {
     GROUP_MEMBERS_RESPONSE,
     REMOVE_USER_FROM_GROUP,
     DISBAND_GROUP,
-    // Phase 5: Media
     VOICE_MESSAGE,
     WEBCAM_FRAME
 }

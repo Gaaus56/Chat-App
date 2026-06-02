@@ -1,8 +1,6 @@
 package com.chatapp.server.core;
-
 import com.chatapp.server.controller.ServerController;
 import javafx.application.Platform;
-
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -13,46 +11,31 @@ import java.util.List;
 import java.util.ArrayList;
 import com.chatapp.shared.Message;
 import com.chatapp.shared.MessageType;
-
 public class ServerCore implements Runnable {
     private int port;
     private ServerSocket serverSocket;
     private boolean isRunning = false;
     private ServerController controller;
-    
-    // Quản lý các ClientHandler
     public ConcurrentHashMap<String, ClientHandler> clients = new ConcurrentHashMap<>();
-    
-    // Quản lý các nhóm (Tên nhóm -> Danh sách thành viên)
     public ConcurrentHashMap<String, List<String>> groups = new ConcurrentHashMap<>();
-    
-    // Lưu tất cả kết nối để đóng khi Server tắt (kể cả chưa login)
     private java.util.Set<ClientHandler> allConnections = ConcurrentHashMap.newKeySet();
-
     public ServerCore(int port, ServerController controller) {
         this.port = port;
         this.controller = controller;
-        
-        // Tải danh sách nhóm chat từ Database
         java.util.Map<String, java.util.List<String>> savedGroups = com.chatapp.server.dao.GroupDAO.loadAllGroups();
         groups.putAll(savedGroups);
         System.out.println("Đã tải " + savedGroups.size() + " nhóm chat từ Database.");
     }
-
     @Override
     public void run() {
         try {
             serverSocket = new ServerSocket(port);
             isRunning = true;
-            
             while (isRunning) {
                 Socket clientSocket = serverSocket.accept();
                 String ip = clientSocket.getInetAddress().getHostAddress();
-                
-                // Hiển thị lên bảng với tên "Unknown" cho tới khi họ đăng nhập
                 String time = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
                 controller.addClientToTable(ip, "Unknown", time);
-                
                 ClientHandler handler = new ClientHandler(clientSocket, this, ip, controller);
                 allConnections.add(handler);
                 new Thread(handler).start();
@@ -63,11 +46,9 @@ public class ServerCore implements Runnable {
             }
         }
     }
-
     public void stopServer() {
         isRunning = false;
         try {
-            // Đóng TẤT CẢ kết nối đang mở
             for (ClientHandler handler : allConnections) {
                 handler.closeConnection();
             }
@@ -81,12 +62,10 @@ public class ServerCore implements Runnable {
             e.printStackTrace();
         }
     }
-    
     public void addAuthenticatedClient(String username, ClientHandler handler) {
         clients.put(username, handler);
         broadcastOnlineUsers();
     }
-    
     public void removeClient(String username, ClientHandler handler) {
         if (handler != null) {
             allConnections.remove(handler);
@@ -97,7 +76,6 @@ public class ServerCore implements Runnable {
             broadcastOnlineUsers();
         }
     }
-
     public void broadcastOnlineUsers() {
         List<String> userList = new ArrayList<>(clients.keySet());
         Message msg = new Message(MessageType.ONLINE_USERS_LIST);
@@ -106,7 +84,6 @@ public class ServerCore implements Runnable {
             handler.sendMessage(msg);
         }
     }
-
     public void createGroup(String groupName, List<String> members) {
         groups.put(groupName, members);
         Message msg = new Message(MessageType.ADD_USER_TO_GROUP, "Server", "", groupName);

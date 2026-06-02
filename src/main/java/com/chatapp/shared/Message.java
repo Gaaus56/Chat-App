@@ -1,10 +1,7 @@
 package com.chatapp.shared;
-
 import java.io.Serializable;
-
 public class Message implements Serializable {
     private static final long serialVersionUID = 1L;
-
     private MessageType type;
     private String sender;
     private String receiver;
@@ -12,7 +9,6 @@ public class Message implements Serializable {
     private String fileName;
     private byte[] fileData;
     private Object payload;
-
     public Message(MessageType type) { this.type = type; }
     public Message(MessageType type, String sender, String receiver, String content) {
         this.type = type;
@@ -20,7 +16,6 @@ public class Message implements Serializable {
         this.receiver = receiver;
         this.content = content;
     }
-
     public MessageType getType() { return type; }
     public void setType(MessageType type) { this.type = type; }
     public String getSender() { return sender; }

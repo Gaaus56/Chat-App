@@ -2,7 +2,6 @@ import com.chatapp.server.dao.MessageDAO;
 import com.chatapp.server.db.SQLiteConnection;
 import com.chatapp.shared.Message;
 import java.util.List;
-
 public class TestDB {
     public static void main(String[] args) {
         try {

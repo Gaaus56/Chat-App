@@ -1,18 +1,14 @@
 package com.chatapp.client.media;
-
 import javax.sound.sampled.*;
 import java.io.ByteArrayOutputStream;
-
 public class AudioRecorder {
     private TargetDataLine line;
     private AudioFormat format;
     private ByteArrayOutputStream out;
     private boolean isRecording;
-
     public AudioRecorder() {
         format = new AudioFormat(16000, 16, 1, true, true);
     }
-
     public void startRecording() throws LineUnavailableException {
         DataLine.Info info = new DataLine.Info(TargetDataLine.class, format);
         line = (TargetDataLine) AudioSystem.getLine(info);
@@ -20,7 +16,6 @@ public class AudioRecorder {
         line.start();
         isRecording = true;
         out = new ByteArrayOutputStream();
-
         Thread recordingThread = new Thread(() -> {
             byte[] buffer = new byte[1024];
             while (isRecording) {
@@ -32,7 +27,6 @@ public class AudioRecorder {
         });
         recordingThread.start();
     }
-
     public byte[] stopRecording() {
         isRecording = false;
         if (line != null) {

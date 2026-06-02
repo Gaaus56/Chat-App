@@ -1,21 +1,17 @@
 package com.chatapp.client.richtext;
-
 import javafx.scene.Node;
 import org.fxmisc.richtext.GenericStyledArea;
 import org.fxmisc.richtext.StyledTextArea;
 import org.fxmisc.richtext.model.SegmentOps;
 import org.fxmisc.richtext.model.StyledSegment;
 import org.reactfx.util.Either;
-
 import java.util.function.BiConsumer;
-
 public class EmojiTextArea extends GenericStyledArea<String, Either<String, LinkedImage>, String> {
-
     public EmojiTextArea() {
         super(
-            "", // default paragraph style
+            "", 
             (textFlow, style) -> textFlow.setStyle(style),
-            "", // default segment style
+            "", 
             SegmentOps.<String>styledTextOps()._or(
                 new LinkedImageOps<String>(),
                 (s1, s2) -> java.util.Optional.empty()
@@ -25,7 +21,6 @@ public class EmojiTextArea extends GenericStyledArea<String, Either<String, Link
         this.setWrapText(true);
         this.setStyle("-fx-font-family: 'Segoe UI', sans-serif; -fx-font-size: 14px;");
     }
-
     private static Node createNode(StyledSegment<Either<String, LinkedImage>, String> seg,
                                    BiConsumer<? super org.fxmisc.richtext.TextExt, String> applyStyle) {
         return seg.getSegment().unify(
@@ -33,7 +28,6 @@ public class EmojiTextArea extends GenericStyledArea<String, Either<String, Link
             LinkedImage::createNode
         );
     }
-    
     public void insertEmoji(String imagePath) {
         int caret = this.getCaretPosition();
         org.fxmisc.richtext.model.ReadOnlyStyledDocument<String, Either<String, LinkedImage>, String> doc = 
@@ -43,7 +37,6 @@ public class EmojiTextArea extends GenericStyledArea<String, Either<String, Link
             );
         this.replaceSelection(doc);
     }
-    
     public String getPlainTextWithEmojis() {
         StringBuilder sb = new StringBuilder();
         for (org.fxmisc.richtext.model.Paragraph<String, Either<String, LinkedImage>, String> p : this.getParagraphs()) {

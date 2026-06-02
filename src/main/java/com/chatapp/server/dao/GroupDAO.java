@@ -1,9 +1,7 @@
 package com.chatapp.server.dao;
-
 import com.chatapp.server.db.SQLiteConnection;
 import java.sql.*;
 import java.util.*;
-
 public class GroupDAO {
     public static void saveGroup(String groupName, List<String> members) {
         String sql = "INSERT OR REPLACE INTO chat_groups (group_name, members) VALUES (?, ?)";
@@ -16,7 +14,6 @@ public class GroupDAO {
             e.printStackTrace(); 
         }
     }
-    
     public static Map<String, List<String>> loadAllGroups() {
         Map<String, List<String>> map = new HashMap<>();
         String sql = "SELECT * FROM chat_groups";
@@ -34,7 +31,6 @@ public class GroupDAO {
         }
         return map;
     }
-    
     public static void deleteGroup(String groupName) {
         String sql = "DELETE FROM chat_groups WHERE group_name = ?";
         try (Connection conn = SQLiteConnection.getConnection();
