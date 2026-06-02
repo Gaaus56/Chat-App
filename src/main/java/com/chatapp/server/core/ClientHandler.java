@@ -88,6 +88,29 @@ public class ClientHandler implements Runnable {
         else if (msg.getType() == MessageType.GET_ONLINE_USERS) {
             serverCore.broadcastOnlineUsers();
         }
+        else if (msg.getType() == MessageType.GET_UNREAD_MESSAGES) {
+            java.util.List<String> unread = userDAO.getUnreadSenders(username, serverCore.groups);
+            if (!unread.isEmpty()) {
+                Message unreadMsg = new Message(MessageType.UNREAD_MESSAGES_LIST);
+                unreadMsg.setPayload(unread);
+                sendMessage(unreadMsg);
+            }
+        }
+        else if (msg.getType() == MessageType.GET_ALL_USERS) {
+            com.chatapp.server.dao.UserDAO userDAO = new com.chatapp.server.dao.UserDAO();
+            java.util.List<String> allUsers = userDAO.getAllUsers();
+            Message res = new Message(MessageType.ALL_USERS_LIST, "Server", username, "");
+            res.setPayload(allUsers);
+            sendMessage(res);
+        }
+        else if (msg.getType() == MessageType.GET_GROUPS) {
+            for (java.util.Map.Entry<String, java.util.List<String>> entry : serverCore.groups.entrySet()) {
+                if (entry.getValue().contains(username)) {
+                    Message groupMsg = new Message(MessageType.ADD_USER_TO_GROUP, "Server", "", entry.getKey());
+                    sendMessage(groupMsg);
+                }
+            }
+        }
         else if (msg.getType() == MessageType.PRIVATE_CHAT) {
             String receiver = msg.getReceiver();
             int msgId = MessageDAO.saveMessage(msg.getSender(), receiver, msg.getContent());
@@ -134,9 +157,13 @@ public class ClientHandler implements Runnable {
             String groupName = msg.getContent();
             List<String> members = (List<String>) msg.getPayload();
             serverCore.createGroup(groupName, members);
+            com.chatapp.server.dao.GroupDAO.saveGroup(groupName, members);
         }
         else if (msg.getType() == MessageType.GROUP_CHAT) {
             String groupName = msg.getReceiver();
+            int msgId = com.chatapp.server.dao.MessageDAO.saveMessage(msg.getSender(), groupName, msg.getContent());
+            msg.setPayload(msgId);
+            
             List<String> members = serverCore.groups.get(groupName);
             if (members != null) {
                 for (String member : members) {
@@ -171,6 +198,7 @@ public class ClientHandler implements Runnable {
                     }
                 }
                 serverCore.groups.put(groupName, newMembers);
+                com.chatapp.server.dao.GroupDAO.saveGroup(groupName, newMembers);
             }
         }
         else if (msg.getType() == MessageType.GET_GROUP_MEMBERS) {
@@ -180,9 +208,26 @@ public class ClientHandler implements Runnable {
             res.setPayload(members);
             sendMessage(res);
         }
+        else if (msg.getType() == MessageType.DISBAND_GROUP) {
+            String groupName = msg.getReceiver();
+            List<String> members = serverCore.groups.get(groupName);
+            if (members != null) {
+                // Gửi thông báo REMOVE_USER_FROM_GROUP đến tất cả thành viên để họ tự động xóa tab
+                for (String mem : members) {
+                    ClientHandler h = serverCore.clients.get(mem);
+                    if (h != null) {
+                        Message rmMsg = new Message(MessageType.REMOVE_USER_FROM_GROUP, "Server", "", groupName);
+                        h.sendMessage(rmMsg);
+                    }
+                }
+                serverCore.groups.remove(groupName);
+                com.chatapp.server.dao.GroupDAO.deleteGroup(groupName);
+            }
+        }
         else if (msg.getType() == MessageType.GET_CHAT_HISTORY) {
             String targetUser = msg.getReceiver();
-            List<Message> history = MessageDAO.getChatHistory(username, targetUser);
+            boolean isGroup = serverCore.groups.containsKey(targetUser);
+            List<Message> history = com.chatapp.server.dao.MessageDAO.getChatHistory(username, targetUser, isGroup);
             Message res = new Message(MessageType.CHAT_HISTORY_RESPONSE, username, targetUser, "");
             res.setPayload(history);
             sendMessage(res);
@@ -208,7 +253,10 @@ public class ClientHandler implements Runnable {
     }
 
     public void closeConnection() {
-        serverCore.removeClient(username);
+        if (username != null) {
+            userDAO.updateLogoutTime(username);
+            serverCore.removeClient(username);
+        }
         try {
             if (in != null) in.close();
             if (out != null) out.close();

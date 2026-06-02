@@ -18,38 +18,28 @@ public class WebcamService {
         webcam = Webcam.getDefault();
     }
     
-    public void startStreaming(ClientCore clientCore, String myUsername, String target) {
-        if (webcam != null && !webcam.isOpen()) {
-            webcam.open();
-        }
-        isStreaming = true;
-        
-        streamThread = new Thread(() -> {
-            while (isStreaming) {
-                try {
-                    BufferedImage image = webcam.getImage();
-                    if (image != null) {
-                        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                        ImageIO.write(image, "jpg", baos);
-                        byte[] imageBytes = baos.toByteArray();
-                        
-                        Message msg = new Message(MessageType.WEBCAM_FRAME, myUsername, target, "");
-                        msg.setPayload(imageBytes);
-                        clientCore.sendMessage(msg);
-                    }
-                    Thread.sleep(100); // ~10 FPS
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
+    public byte[] takePicture() {
+        if (webcam == null) return null;
+        try {
+            // Mở webcam (nếu chưa mở)
+            if (!webcam.isOpen()) {
+                webcam.open();
             }
-        });
-        streamThread.start();
-    }
-    
-    public void stopStreaming() {
-        isStreaming = false;
-        if (webcam != null && webcam.isOpen()) {
+            
+            // Lấy 1 khung hình
+            BufferedImage image = webcam.getImage();
+            
+            // Đóng webcam để nhả tài nguyên cho client khác trên cùng máy
             webcam.close();
+            
+            if (image != null) {
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                ImageIO.write(image, "jpg", baos);
+                return baos.toByteArray();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
+        return null;
     }
 }

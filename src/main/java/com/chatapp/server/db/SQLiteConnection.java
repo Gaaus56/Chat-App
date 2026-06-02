@@ -28,6 +28,20 @@ public class SQLiteConnection {
                          "receiver TEXT NOT NULL, " +
                          "content TEXT NOT NULL, " +
                          "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)");
+                         
+            // Tạo bảng chat_groups
+            stmt.execute("CREATE TABLE IF NOT EXISTS chat_groups (" +
+                         "group_name TEXT PRIMARY KEY, " +
+                         "members TEXT NOT NULL)");
+                         
+            // Thêm cột last_logout cho chức năng tin nhắn chưa đọc
+            try {
+                // SQLite không cho phép dùng hàm CURRENT_TIMESTAMP làm DEFAULT khi ALTER TABLE, phải dùng string cố định
+                stmt.execute("ALTER TABLE users ADD COLUMN last_logout DATETIME DEFAULT '1970-01-01 00:00:00'");
+            } catch (Exception ignore) {
+                // Cột đã tồn tại, không cần làm gì
+            }
+            
             System.out.println("Khởi tạo CSDL hoàn tất.");
         } catch (Exception e) {
             e.printStackTrace();

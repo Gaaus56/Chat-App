@@ -39,20 +39,21 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class MainChatController {
-    @FXML private ListView<String> listOnlineUsers;
+    @FXML private ListView<String> listAllUsers;
     @FXML private ListView<String> listGroups;
     @FXML private TabPane tabPaneChats;
 
     private ClientCore clientCore;
     private String myUsername;
     private ObservableList<String> onlineUsers = FXCollections.observableArrayList();
+    private ObservableList<String> allUsersObs = FXCollections.observableArrayList();
+    private Map<String, Boolean> unreadMessages = new HashMap<>();
     private ObservableList<String> groupsList = FXCollections.observableArrayList();
     private Map<String, VBox> chatHistories = new HashMap<>();
     private Map<String, Node> typingNodes = new HashMap<>(); // Chứa bong bóng 'đang gõ...'
     
-    // Lưu trữ giao diện hiển thị Webcam
-    private Map<String, javafx.stage.Stage> videoStages = new HashMap<>();
-    private Map<String, javafx.scene.image.ImageView> videoViews = new HashMap<>();
+    // Lưu trữ giao diện hiển thị Webcam (đã xóa)
+    // private Map<String, javafx.stage.Stage> videoStages = new HashMap<>();
 
     
     // Mảng 35 Emoji được tải về
@@ -67,8 +68,45 @@ public class MainChatController {
         this.clientCore = clientCore;
         this.myUsername = myUsername;
         
-        listOnlineUsers.setItems(onlineUsers);
+        listAllUsers.setItems(allUsersObs);
         listGroups.setItems(groupsList);
+        
+        // Cấu hình CellFactory để highlight tin chưa đọc và phân biệt online/offline
+        javafx.util.Callback<ListView<String>, ListCell<String>> cellFactory = lv -> new ListCell<String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("-fx-background-color: transparent;");
+                } else {
+                    boolean isUnread = unreadMessages.getOrDefault(item, false);
+                    String displayText = item;
+                    
+                    if (lv == listAllUsers) {
+                        if (onlineUsers.contains(item)) {
+                            displayText += " (Online)";
+                            setTextFill(Color.GREEN);
+                        } else {
+                            displayText += " (Offline)";
+                            setTextFill(Color.GRAY);
+                        }
+                    } else {
+                        setTextFill(Color.BLACK);
+                    }
+                    
+                    if (isUnread) {
+                        setText("🔴 " + displayText);
+                        setStyle("-fx-font-weight: bold; -fx-background-color: #ffeaa7;");
+                    } else {
+                        setText(displayText);
+                        setStyle("-fx-font-weight: normal; -fx-background-color: transparent;");
+                    }
+                }
+            }
+        };
+        listAllUsers.setCellFactory(cellFactory);
+        listGroups.setCellFactory(cellFactory);
         
         // Nhận gói tin mới cho Màn hình Chat
         clientCore.setOnMessageReceived(this::handleServerMessage);
@@ -76,12 +114,35 @@ public class MainChatController {
         // Yêu cầu tải danh sách user
         clientCore.sendMessage(new Message(MessageType.GET_ONLINE_USERS));
         
-        // Bắt sự kiện click 1 lần vào user online để mở Tab
-        listOnlineUsers.setOnMouseClicked(event -> {
+        // Yêu cầu tải tất cả user trong DB để phục vụ tạo nhóm
+        clientCore.sendMessage(new Message(MessageType.GET_ALL_USERS));
+        
+        // Yêu cầu tải danh sách nhóm mà user này có mặt
+        clientCore.sendMessage(new Message(MessageType.GET_GROUPS));
+        
+        // Yêu cầu tải thông báo tin nhắn chưa đọc
+        clientCore.sendMessage(new Message(MessageType.GET_UNREAD_MESSAGES));
+        
+        // Bắt sự kiện click 1 lần vào user để mở Tab
+        listAllUsers.setOnMouseClicked(event -> {
             if (event.getClickCount() == 1) {
-                String selectedUser = listOnlineUsers.getSelectionModel().getSelectedItem();
+                String selectedUser = listAllUsers.getSelectionModel().getSelectedItem();
                 if (selectedUser != null && !selectedUser.equals(myUsername)) {
+                    unreadMessages.put(selectedUser, false);
+                    listAllUsers.refresh();
                     openChatTab(selectedUser, false);
+                }
+            }
+        });
+        
+        // Bắt sự kiện chuyển Tab để xóa trạng thái unread
+        tabPaneChats.getSelectionModel().selectedItemProperty().addListener((observable, oldTab, newTab) -> {
+            if (newTab != null) {
+                String title = newTab.getText();
+                if (unreadMessages.getOrDefault(title, false)) {
+                    unreadMessages.put(title, false);
+                    listAllUsers.refresh();
+                    listGroups.refresh();
                 }
             }
         });
@@ -91,6 +152,8 @@ public class MainChatController {
             if (event.getClickCount() == 1) {
                 String selectedGroup = listGroups.getSelectionModel().getSelectedItem();
                 if (selectedGroup != null) {
+                    unreadMessages.put(selectedGroup, false);
+                    listGroups.refresh();
                     openChatTab(selectedGroup, true);
                 }
             }
@@ -107,12 +170,33 @@ public class MainChatController {
                     for (String u : users) {
                         if (!u.equals(myUsername)) {
                             onlineUsers.add(u);
+                            if (!allUsersObs.contains(u)) {
+                                allUsersObs.add(u);
+                            }
                         }
                     }
+                    listAllUsers.refresh(); // Cập nhật lại giao diện (chữ Online)
+                    break;
+                case ALL_USERS_LIST:
+                    @SuppressWarnings("unchecked")
+                    List<String> dbUsers = (List<String>) msg.getPayload();
+                    allUsersObs.clear();
+                    for (String u : dbUsers) {
+                        if (!u.equals(myUsername)) allUsersObs.add(u);
+                    }
+                    break;
+                case UNREAD_MESSAGES_LIST:
+                    @SuppressWarnings("unchecked")
+                    List<String> unreadSenders = (List<String>) msg.getPayload();
+                    for (String s : unreadSenders) {
+                        unreadMessages.put(s, true);
+                    }
+                    listAllUsers.refresh();
+                    listGroups.refresh();
                     break;
                 case PRIVATE_CHAT:
                     String sender = msg.getSender();
-                    openChatTab(sender, false);
+                    handleIncomingMessage(sender, false);
                     VBox history = chatHistories.get(sender);
                     if (history != null) {
                         hideTypingIndicator(sender);
@@ -127,7 +211,7 @@ public class MainChatController {
                     break;
                 case GROUP_CHAT:
                     String targetGroup = msg.getReceiver();
-                    openChatTab(targetGroup, true);
+                    handleIncomingMessage(targetGroup, true);
                     VBox gHistory = chatHistories.get(targetGroup);
                     if (gHistory != null) {
                         addMessageBubble(gHistory, msg.getSender() + ": " + msg.getContent(), false, -1, targetGroup);
@@ -170,17 +254,22 @@ public class MainChatController {
                         targetChatBox.getChildren().clear();
                         @SuppressWarnings("unchecked")
                         List<Message> hist = (List<Message>) msg.getPayload();
+                        boolean isGroup = groupsList.contains(target);
                         for (Message hMsg : hist) {
                             boolean isMine = hMsg.getSender().equals(myUsername);
                             int hMsgId = hMsg.getPayload() != null ? (Integer) hMsg.getPayload() : -1;
-                            addMessageBubble(targetChatBox, hMsg.getContent(), isMine, hMsgId, target);
+                            String displayContent = hMsg.getContent();
+                            if (isGroup && !isMine) {
+                                displayContent = hMsg.getSender() + ": " + displayContent;
+                            }
+                            addMessageBubble(targetChatBox, displayContent, isMine, hMsgId, target);
                         }
                     }
                     break;
                 case SEND_FILE:
-                    String senderFile = msg.getSender();
-                    openChatTab(senderFile, false);
-                    VBox boxFile = chatHistories.get(senderFile);
+                    String targetFile = groupsList.contains(msg.getReceiver()) ? msg.getReceiver() : msg.getSender();
+                    handleIncomingMessage(targetFile, groupsList.contains(msg.getReceiver()));
+                    VBox boxFile = chatHistories.get(targetFile);
                     if (boxFile != null) {
                         String fileName = msg.getContent();
                         byte[] fileBytes = (byte[]) msg.getPayload();
@@ -209,9 +298,9 @@ public class MainChatController {
                     }
                     break;
                 case VOICE_MESSAGE:
-                    String senderVoice = msg.getSender();
-                    openChatTab(senderVoice, false);
-                    VBox boxVoice = chatHistories.get(senderVoice);
+                    String targetVoice = groupsList.contains(msg.getReceiver()) ? msg.getReceiver() : msg.getSender();
+                    handleIncomingMessage(targetVoice, groupsList.contains(msg.getReceiver()));
+                    VBox boxVoice = chatHistories.get(targetVoice);
                     if (boxVoice != null) {
                         byte[] voiceBytes = (byte[]) msg.getPayload();
                         Button btnPlay = new Button("▶ Nghe tin nhắn thoại");
@@ -225,21 +314,39 @@ public class MainChatController {
                     }
                     break;
                 case WEBCAM_FRAME:
-                    String senderCam = msg.getSender();
-                    javafx.application.Platform.runLater(() -> {
-                        showVideoStage(senderCam);
-                        byte[] frameBytes = (byte[]) msg.getPayload();
-                        try {
-                            java.io.ByteArrayInputStream bis = new java.io.ByteArrayInputStream(frameBytes);
-                            javafx.scene.image.Image img = new javafx.scene.image.Image(bis);
-                            videoViews.get(senderCam).setImage(img);
-                        } catch (Exception ex) {}
-                    });
+                    String targetCam = groupsList.contains(msg.getReceiver()) ? msg.getReceiver() : msg.getSender();
+                    handleIncomingMessage(targetCam, groupsList.contains(msg.getReceiver()));
+                    VBox boxCam = chatHistories.get(targetCam);
+                    if (boxCam != null) {
+                        Object payload = msg.getPayload();
+                        boolean isMine = msg.getSender().equals(myUsername);
+                        javafx.application.Platform.runLater(() -> {
+                            if (payload instanceof byte[]) {
+                                renderPhotoBubble((byte[]) payload, boxCam, isMine, msg.getSender());
+                            } else if (payload instanceof java.util.List) {
+                                renderVideoBubble((java.util.List<byte[]>) payload, boxCam, isMine, msg.getSender());
+                            }
+                        });
+                    }
                     break;
                 default:
                     break;
             }
         });
+    }
+
+    private void handleIncomingMessage(String target, boolean isGroup) {
+        boolean isTabSelected = false;
+        Tab selectedTab = tabPaneChats.getSelectionModel().getSelectedItem();
+        if (selectedTab != null && selectedTab.getText().equals(target)) {
+            isTabSelected = true;
+        }
+        
+        if (!isTabSelected) {
+            unreadMessages.put(target, true);
+            listAllUsers.refresh();
+            listGroups.refresh();
+        }
     }
 
     private void openChatTab(String target, boolean isGroup) {
@@ -356,11 +463,6 @@ public class MainChatController {
         btnFile.setStyle("-fx-background-color: transparent; -fx-text-fill: #2ecc71; -fx-font-size: 24px; -fx-cursor: hand; -fx-padding: 0 5 5 5;");
         btnFile.setMinSize(Button.USE_PREF_SIZE, Button.USE_PREF_SIZE);
         btnFile.setOnAction(ev -> {
-            if (isGroup) {
-                Alert a = new Alert(Alert.AlertType.WARNING, "Gửi file trong nhóm đang được phát triển.");
-                a.show();
-                return;
-            }
             FileChooser fileChooser = new FileChooser();
             fileChooser.setTitle("Chọn file để gửi");
             File file = fileChooser.showOpenDialog(tabPaneChats.getScene().getWindow());
@@ -417,22 +519,32 @@ public class MainChatController {
             }
         });
         
-        Button btnCam = new Button("📹");
-        btnCam.setTooltip(new Tooltip("Bật/Tắt Webcam"));
+        Button btnCam = new Button("📸");
+        btnCam.setTooltip(new Tooltip("Camera - Chụp ảnh/Quay video"));
         btnCam.setStyle("-fx-background-color: transparent; -fx-text-fill: #9b59b6; -fx-font-size: 24px; -fx-cursor: hand; -fx-padding: 0 5 5 5;");
         btnCam.setMinSize(Button.USE_PREF_SIZE, Button.USE_PREF_SIZE);
         
-        com.chatapp.client.media.WebcamService[] webcamService = new com.chatapp.client.media.WebcamService[1];
         btnCam.setOnAction(ev -> {
-            if (webcamService[0] == null) {
-                webcamService[0] = new com.chatapp.client.media.WebcamService();
-                webcamService[0].startStreaming(clientCore, myUsername, target);
-                btnCam.setStyle("-fx-background-color: #ffeaea; -fx-text-fill: #9b59b6; -fx-font-size: 24px; -fx-cursor: hand; -fx-padding: 0 5 5 5;");
-            } else {
-                webcamService[0].stopStreaming();
-                webcamService[0] = null;
-                btnCam.setStyle("-fx-background-color: transparent; -fx-text-fill: #9b59b6; -fx-font-size: 24px; -fx-cursor: hand; -fx-padding: 0 5 5 5;");
-            }
+            new com.chatapp.client.media.WebcamDialog().show(media -> {
+                if (media instanceof byte[]) {
+                    byte[] photoBytes = (byte[]) media;
+                    if (photoBytes.length > 0) {
+                        Message camMsg = new Message(MessageType.WEBCAM_FRAME, myUsername, target, "Đã gửi một ảnh");
+                        camMsg.setPayload(photoBytes);
+                        clientCore.sendMessage(camMsg);
+                        javafx.application.Platform.runLater(() -> renderPhotoBubble(photoBytes, chatBox, true, myUsername));
+                    }
+                } else if (media instanceof java.util.List) {
+                    @SuppressWarnings("unchecked")
+                    java.util.List<byte[]> videoFrames = (java.util.List<byte[]>) media;
+                    if (!videoFrames.isEmpty()) {
+                        Message camMsg = new Message(MessageType.WEBCAM_FRAME, myUsername, target, "Đã gửi một video");
+                        camMsg.setPayload(videoFrames);
+                        clientCore.sendMessage(camMsg);
+                        javafx.application.Platform.runLater(() -> renderVideoBubble(videoFrames, chatBox, true, myUsername));
+                    }
+                }
+            });
         });
         
         HBox bottomBar = new HBox(5);
@@ -460,32 +572,138 @@ public class MainChatController {
         tabPaneChats.getTabs().add(tab);
         tabPaneChats.getSelectionModel().select(tab);
         
-        // Gửi yêu cầu lấy lịch sử chat (chỉ cho chat riêng)
-        if (!isGroup) {
-            clientCore.sendMessage(new Message(MessageType.GET_CHAT_HISTORY, myUsername, target, ""));
-        }
+        // Gửi yêu cầu lấy lịch sử chat cho cả chat riêng và group
+        clientCore.sendMessage(new Message(MessageType.GET_CHAT_HISTORY, myUsername, target, ""));
+    }
+    
+    private void renderPhotoBubble(byte[] photoBytes, VBox chatBox, boolean isMine, String senderName) {
+        try {
+            java.io.ByteArrayInputStream bis = new java.io.ByteArrayInputStream(photoBytes);
+            javafx.scene.image.Image img = new javafx.scene.image.Image(bis);
+            javafx.scene.image.ImageView iv = new javafx.scene.image.ImageView(img);
+            iv.setFitWidth(200);
+            iv.setPreserveRatio(true);
+            iv.setStyle("-fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 5, 0, 0, 0); -fx-cursor: hand;");
+            
+            iv.setOnMouseClicked(e -> showMediaViewer(photoBytes, null));
+            
+            VBox wrapper = new VBox(2);
+            wrapper.setAlignment(isMine ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
+            if (!isMine && senderName != null && !senderName.isEmpty()) {
+                javafx.scene.control.Label lblName = new javafx.scene.control.Label(senderName);
+                lblName.setStyle("-fx-text-fill: gray; -fx-font-size: 10px;");
+                wrapper.getChildren().add(lblName);
+            }
+            wrapper.getChildren().add(iv);
+            
+            HBox rowImg = new HBox(wrapper);
+            rowImg.setAlignment(isMine ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
+            if (isMine) rowImg.setPadding(new javafx.geometry.Insets(5, 5, 5, 50));
+            chatBox.getChildren().add(rowImg);
+        } catch(Exception e) {}
     }
 
-    private void showVideoStage(String sender) {
-        if (!videoStages.containsKey(sender)) {
-            javafx.stage.Stage stage = new javafx.stage.Stage();
-            stage.setTitle("Video call với " + sender);
-            javafx.scene.image.ImageView iv = new javafx.scene.image.ImageView();
-            iv.setFitWidth(640);
-            iv.setFitHeight(480);
-            videoViews.put(sender, iv);
+    private void renderVideoBubble(java.util.List<byte[]> frames, VBox chatBox, boolean isMine, String senderName) {
+        if (frames == null || frames.isEmpty()) return;
+        try {
+            // Lấy frame đầu tiên làm thumbnail
+            java.io.ByteArrayInputStream bis = new java.io.ByteArrayInputStream(frames.get(0));
+            javafx.scene.image.Image img = new javafx.scene.image.Image(bis);
+            javafx.scene.image.ImageView iv = new javafx.scene.image.ImageView(img);
+            iv.setFitWidth(200);
+            iv.setPreserveRatio(true);
+            iv.setStyle("-fx-cursor: hand;");
+            iv.setOnMouseClicked(e -> showMediaViewer(null, frames));
             
-            VBox box = new VBox(iv);
-            box.setAlignment(Pos.CENTER);
-            box.setStyle("-fx-background-color: black;");
-            stage.setScene(new Scene(box, 640, 480));
-            stage.setOnCloseRequest(e -> {
-                videoStages.remove(sender);
-                videoViews.remove(sender);
+            javafx.scene.layout.StackPane sp = new javafx.scene.layout.StackPane(iv);
+            Button btnPlay = new Button("▶");
+            btnPlay.setStyle("-fx-background-color: rgba(0,0,0,0.5); -fx-text-fill: white; -fx-font-size: 30px; -fx-background-radius: 25; -fx-cursor: hand;");
+            sp.getChildren().add(btnPlay);
+            sp.setStyle("-fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 5, 0, 0, 0);");
+            
+            btnPlay.setOnAction(e -> {
+                btnPlay.setVisible(false);
+                Thread playThread = new Thread(() -> {
+                    for (byte[] frameBytes : frames) {
+                        try {
+                            java.io.ByteArrayInputStream fBis = new java.io.ByteArrayInputStream(frameBytes);
+                            javafx.scene.image.Image fImg = new javafx.scene.image.Image(fBis);
+                            javafx.application.Platform.runLater(() -> iv.setImage(fImg));
+                            Thread.sleep(100);
+                        } catch (Exception ex) {}
+                    }
+                    javafx.application.Platform.runLater(() -> {
+                        iv.setImage(img);
+                        btnPlay.setVisible(true);
+                    });
+                });
+                playThread.start();
             });
-            videoStages.put(sender, stage);
-            stage.show();
+            
+            VBox wrapper = new VBox(2);
+            wrapper.setAlignment(isMine ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
+            if (!isMine && senderName != null && !senderName.isEmpty()) {
+                javafx.scene.control.Label lblName = new javafx.scene.control.Label(senderName);
+                lblName.setStyle("-fx-text-fill: gray; -fx-font-size: 10px;");
+                wrapper.getChildren().add(lblName);
+            }
+            wrapper.getChildren().add(sp);
+            
+            HBox rowImg = new HBox(wrapper);
+            rowImg.setAlignment(isMine ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
+            if (isMine) rowImg.setPadding(new javafx.geometry.Insets(5, 5, 5, 50));
+            chatBox.getChildren().add(rowImg);
+        } catch(Exception e) {}
+    }
+
+    private void showMediaViewer(byte[] photoBytes, java.util.List<byte[]> videoFrames) {
+        javafx.stage.Stage stage = new javafx.stage.Stage();
+        stage.initModality(javafx.stage.Modality.APPLICATION_MODAL);
+        
+        javafx.scene.image.ImageView iv = new javafx.scene.image.ImageView();
+        iv.setFitWidth(800);
+        iv.setFitHeight(600);
+        iv.setPreserveRatio(true);
+        
+        VBox root = new VBox();
+        root.setAlignment(Pos.CENTER);
+        root.setStyle("-fx-background-color: rgba(0,0,0,0.9);");
+        
+        if (photoBytes != null) {
+            stage.setTitle("Xem Ảnh Toàn Màn Hình");
+            try {
+                iv.setImage(new javafx.scene.image.Image(new java.io.ByteArrayInputStream(photoBytes)));
+                root.getChildren().add(iv);
+            } catch (Exception e) {}
+        } else if (videoFrames != null && !videoFrames.isEmpty()) {
+            stage.setTitle("Xem Video Toàn Màn Hình");
+            try {
+                iv.setImage(new javafx.scene.image.Image(new java.io.ByteArrayInputStream(videoFrames.get(0))));
+                
+                Button btnPlay = new Button("▶");
+                btnPlay.setStyle("-fx-background-color: rgba(255,255,255,0.3); -fx-text-fill: white; -fx-font-size: 50px; -fx-background-radius: 50; -fx-cursor: hand;");
+                
+                javafx.scene.layout.StackPane sp = new javafx.scene.layout.StackPane(iv, btnPlay);
+                root.getChildren().add(sp);
+                
+                btnPlay.setOnAction(e -> {
+                    btnPlay.setVisible(false);
+                    new Thread(() -> {
+                        for (byte[] frame : videoFrames) {
+                            try {
+                                javafx.scene.image.Image fImg = new javafx.scene.image.Image(new java.io.ByteArrayInputStream(frame));
+                                javafx.application.Platform.runLater(() -> iv.setImage(fImg));
+                                Thread.sleep(100);
+                            } catch (Exception ex) {}
+                        }
+                        javafx.application.Platform.runLater(() -> btnPlay.setVisible(true));
+                    }).start();
+                });
+            } catch (Exception e) {}
         }
+        
+        stage.setScene(new Scene(root, 850, 650));
+        stage.show();
     }
     
     private void sendChatMessage(String target, com.chatapp.client.richtext.EmojiTextArea txtInput, VBox chatBox, boolean isGroup) {
@@ -624,68 +842,144 @@ public class MainChatController {
     }
 
     private void showManageGroupDialog(String groupName, List<String> currentMembers) {
-        Dialog<List<String>> dialog = new Dialog<>();
+        boolean isAdmin = !currentMembers.isEmpty() && currentMembers.get(0).equals(myUsername);
+        String adminName = currentMembers.isEmpty() ? "Unknown" : currentMembers.get(0);
+        
+        Dialog<Void> dialog = new Dialog<>();
         dialog.setTitle("Quản lý nhóm: " + groupName);
-        dialog.setHeaderText("Thêm hoặc xóa thành viên");
-
-        ButtonType saveButtonType = new ButtonType("Lưu", ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
-
-        VBox content = new VBox(10);
-        ListView<CheckBox> userChecks = new ListView<>();
+        dialog.setHeaderText("Trưởng nhóm: " + adminName + (isAdmin ? " (Là bạn)" : ""));
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
         
-        for (String user : onlineUsers) {
-            if (user.equals(myUsername)) continue;
-            CheckBox cb = new CheckBox(user);
-            if (currentMembers.contains(user)) {
-                cb.setSelected(true);
+        TabPane tabPane = new TabPane();
+        
+        // Tab 1: Xem danh sách
+        Tab tabView = new Tab("Danh sách");
+        tabView.setClosable(false);
+        ListView<String> lvMembers = new ListView<>();
+        lvMembers.getItems().addAll(currentMembers);
+        tabView.setContent(lvMembers);
+        
+        // Tab 2: Thêm thành viên
+        Tab tabAdd = new Tab("Thêm thành viên");
+        tabAdd.setClosable(false);
+        VBox boxAdd = new VBox(5);
+        boxAdd.setStyle("-fx-padding: 10;");
+        ListView<CheckBox> lvAdd = new ListView<>();
+        for (String u : allUsersObs) {
+            if (!currentMembers.contains(u)) {
+                lvAdd.getItems().add(new CheckBox(u));
             }
-            userChecks.getItems().add(cb);
         }
-        
-        content.getChildren().addAll(new Label("Danh sách thành viên:"), userChecks);
-        dialog.getDialogPane().setContent(content);
-
-        dialog.setResultConverter(dialogButton -> {
-            if (dialogButton == saveButtonType) {
-                List<String> newMembers = new java.util.ArrayList<>();
-                newMembers.add(myUsername);
-                for (CheckBox cb : userChecks.getItems()) {
-                    if (cb.isSelected()) newMembers.add(cb.getText());
-                }
-                return newMembers;
+        Button btnAdd = new Button("Thêm vào nhóm");
+        btnAdd.setOnAction(e -> {
+            List<String> toAdd = new java.util.ArrayList<>();
+            for (CheckBox cb : lvAdd.getItems()) {
+                if (cb.isSelected()) toAdd.add(cb.getText());
             }
-            return null;
+            if (!toAdd.isEmpty()) {
+                List<String> newMems = new java.util.ArrayList<>(currentMembers);
+                newMems.addAll(toAdd);
+                Message msg = new Message(MessageType.UPDATE_GROUP_MEMBERS, myUsername, groupName, "");
+                msg.setPayload(newMems);
+                clientCore.sendMessage(msg);
+                dialog.close();
+            }
         });
-
-        dialog.showAndWait().ifPresent(newMembers -> {
-            Message msg = new Message(MessageType.UPDATE_GROUP_MEMBERS, myUsername, groupName, "");
-            msg.setPayload(newMembers);
-            clientCore.sendMessage(msg);
-        });
+        boxAdd.getChildren().addAll(new Label("Chọn người muốn thêm:"), lvAdd, btnAdd);
+        tabAdd.setContent(boxAdd);
+        
+        // Tab 3: Xóa thành viên (Chỉ Admin)
+        Tab tabRemove = new Tab("Kick thành viên");
+        tabRemove.setClosable(false);
+        VBox boxRem = new VBox(5);
+        boxRem.setStyle("-fx-padding: 10;");
+        if (isAdmin) {
+            ListView<CheckBox> lvRem = new ListView<>();
+            for (String u : currentMembers) {
+                if (!u.equals(myUsername)) {
+                    lvRem.getItems().add(new CheckBox(u));
+                }
+            }
+            Button btnRem = new Button("Kick khỏi nhóm");
+            btnRem.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white;");
+            btnRem.setOnAction(e -> {
+                List<String> toRem = new java.util.ArrayList<>();
+                for (CheckBox cb : lvRem.getItems()) {
+                    if (cb.isSelected()) toRem.add(cb.getText());
+                }
+                if (!toRem.isEmpty()) {
+                    List<String> newMems = new java.util.ArrayList<>(currentMembers);
+                    newMems.removeAll(toRem);
+                    Message msg = new Message(MessageType.UPDATE_GROUP_MEMBERS, myUsername, groupName, "");
+                    msg.setPayload(newMems);
+                    clientCore.sendMessage(msg);
+                    dialog.close();
+                }
+            });
+            boxRem.getChildren().addAll(new Label("Chọn người muốn kick:"), lvRem, btnRem);
+        } else {
+            boxRem.getChildren().add(new Label("Chỉ Trưởng Nhóm (" + adminName + ") mới có quyền kick thành viên!"));
+        }
+        tabRemove.setContent(boxRem);
+        
+        // Tab 4: Cài đặt (Chỉ Admin)
+        Tab tabSettings = new Tab("Cài đặt");
+        tabSettings.setClosable(false);
+        VBox boxSet = new VBox(10);
+        boxSet.setStyle("-fx-padding: 10; -fx-alignment: center;");
+        if (isAdmin) {
+            Button btnDisband = new Button("Giải tán nhóm");
+            btnDisband.setStyle("-fx-background-color: #c0392b; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 10 20;");
+            btnDisband.setOnAction(e -> {
+                Alert confirm = new Alert(Alert.AlertType.CONFIRMATION, "Bạn có chắc chắn muốn giải tán nhóm này vĩnh viễn?", ButtonType.YES, ButtonType.NO);
+                confirm.showAndWait().ifPresent(res -> {
+                    if (res == ButtonType.YES) {
+                        clientCore.sendMessage(new Message(MessageType.DISBAND_GROUP, myUsername, groupName, ""));
+                        dialog.close();
+                    }
+                });
+            });
+            boxSet.getChildren().addAll(new Label("Khu vực nguy hiểm:"), btnDisband);
+        } else {
+            boxSet.getChildren().add(new Label("Chỉ Trưởng Nhóm (" + adminName + ") mới có thể giải tán nhóm!"));
+        }
+        tabSettings.setContent(boxSet);
+        
+        tabPane.getTabs().addAll(tabView, tabAdd, tabRemove, tabSettings);
+        dialog.getDialogPane().setContent(tabPane);
+        dialog.showAndWait();
     }
 
     @FXML
     private void handleCreateGroup() {
         Dialog<String> dialog = new Dialog<>();
         dialog.setTitle("Tạo Nhóm Mới");
-        dialog.setHeaderText("Đặt tên nhóm và chọn thành viên");
+        dialog.setHeaderText("Đặt tên nhóm và chọn thành viên\n(Bạn là Trưởng Nhóm)");
 
         ButtonType createButtonType = new ButtonType("Tạo", ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().addAll(createButtonType, ButtonType.CANCEL);
 
         VBox content = new VBox(10);
         TextField txtGroupName = new TextField();
-        txtGroupName.setPromptText("Nhập tên nhóm...");
+        txtGroupName.setPromptText("Nhập tên nhóm... (Bắt buộc)");
         
         ListView<CheckBox> userChecks = new ListView<>();
-        for (String user : onlineUsers) {
-            CheckBox cb = new CheckBox(user);
-            userChecks.getItems().add(cb);
+        for (String user : allUsersObs) {
+            if (!user.equals(myUsername)) {
+                CheckBox cb = new CheckBox(user);
+                userChecks.getItems().add(cb);
+            }
         }
         
         content.getChildren().addAll(new Label("Tên nhóm:"), txtGroupName, new Label("Thành viên:"), userChecks);
         dialog.getDialogPane().setContent(content);
+
+        // Vô hiệu hóa nút Tạo nếu chưa nhập tên nhóm
+        Node createButton = dialog.getDialogPane().lookupButton(createButtonType);
+        createButton.setDisable(true);
+        txtGroupName.textProperty().addListener((observable, oldValue, newValue) -> {
+            createButton.setDisable(newValue.trim().isEmpty());
+        });
 
         dialog.setResultConverter(dialogButton -> {
             if (dialogButton == createButtonType) {
@@ -697,14 +991,18 @@ public class MainChatController {
         dialog.showAndWait().ifPresent(groupName -> {
             if (!groupName.trim().isEmpty()) {
                 List<String> members = new java.util.ArrayList<>();
-                members.add(myUsername);
+                members.add(myUsername); // Người tạo được thêm đầu tiên = ADMIN
                 for (CheckBox cb : userChecks.getItems()) {
                     if (cb.isSelected()) members.add(cb.getText());
                 }
                 if (members.size() > 1) {
-                    Message msg = new Message(MessageType.CREATE_GROUP, myUsername, "", groupName);
+                    Message msg = new Message(MessageType.CREATE_GROUP, myUsername, "", groupName.trim());
                     msg.setPayload(members);
                     clientCore.sendMessage(msg);
+                } else {
+                    Alert a = new Alert(Alert.AlertType.WARNING, "Nhóm phải có ít nhất 2 thành viên!");
+                    a.setHeaderText(null);
+                    a.show();
                 }
             }
         });
@@ -716,7 +1014,7 @@ public class MainChatController {
         try {
             FXMLLoader loader = new FXMLLoader(getClass().getResource("/com/chatapp/client/ConfigView.fxml"));
             Parent root = loader.load();
-            Stage stage = (Stage) listOnlineUsers.getScene().getWindow();
+            Stage stage = (Stage) listAllUsers.getScene().getWindow();
             stage.setTitle("Quản Lý Máy Chủ - Chat App");
             stage.setScene(new Scene(root));
         } catch (Exception e) {

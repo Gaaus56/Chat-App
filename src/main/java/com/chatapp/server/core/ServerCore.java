@@ -29,6 +29,11 @@ public class ServerCore implements Runnable {
     public ServerCore(int port, ServerController controller) {
         this.port = port;
         this.controller = controller;
+        
+        // Tải danh sách nhóm chat từ Database
+        java.util.Map<String, java.util.List<String>> savedGroups = com.chatapp.server.dao.GroupDAO.loadAllGroups();
+        groups.putAll(savedGroups);
+        System.out.println("Đã tải " + savedGroups.size() + " nhóm chat từ Database.");
     }
 
     @Override
