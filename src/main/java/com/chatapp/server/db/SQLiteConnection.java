@@ -34,13 +34,16 @@ public class SQLiteConnection {
                          "group_name TEXT PRIMARY KEY, " +
                          "members TEXT NOT NULL)");
                          
-            // Thêm cột last_logout cho chức năng tin nhắn chưa đọc
+            // Thêm các cột bổ sung nếu chưa có (dùng ALTER TABLE)
             try {
-                // SQLite không cho phép dùng hàm CURRENT_TIMESTAMP làm DEFAULT khi ALTER TABLE, phải dùng string cố định
+                // Thêm last_logout cho users
                 stmt.execute("ALTER TABLE users ADD COLUMN last_logout DATETIME DEFAULT '1970-01-01 00:00:00'");
-            } catch (Exception ignore) {
-                // Cột đã tồn tại, không cần làm gì
-            }
+            } catch (Exception ignore) { }
+            
+            try {
+                // Thêm msg_type cho messages để lưu phân loại tin nhắn (TEXT, FILE, VOICE, WEBCAM)
+                stmt.execute("ALTER TABLE messages ADD COLUMN msg_type TEXT DEFAULT 'PRIVATE_CHAT'");
+            } catch (Exception ignore) { }
             
             System.out.println("Khởi tạo CSDL hoàn tất.");
         } catch (Exception e) {

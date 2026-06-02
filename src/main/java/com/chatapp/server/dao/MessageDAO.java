@@ -13,13 +13,14 @@ import java.util.List;
 
 public class MessageDAO {
 
-    public static int saveMessage(String sender, String receiver, String content) {
-        String sql = "INSERT INTO messages (sender, receiver, content) VALUES (?, ?, ?)";
+    public static int saveMessage(String sender, String receiver, String content, MessageType type) {
+        String sql = "INSERT INTO messages (sender, receiver, content, msg_type) VALUES (?, ?, ?, ?)";
         try (Connection conn = SQLiteConnection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             pstmt.setString(1, sender);
             pstmt.setString(2, receiver);
             pstmt.setString(3, content);
+            pstmt.setString(4, type.name());
             pstmt.executeUpdate();
             
             try (ResultSet generatedKeys = pstmt.getGeneratedKeys()) {
@@ -53,8 +54,41 @@ public class MessageDAO {
             }
             ResultSet rs = pstmt.executeQuery();
             while (rs.next()) {
-                Message msg = new Message(MessageType.PRIVATE_CHAT, rs.getString("sender"), rs.getString("receiver"), rs.getString("content"));
-                msg.setPayload(rs.getInt("id")); // Lưu ID vào payload để có thể xóa sau này
+                String typeStr = "PRIVATE_CHAT";
+                try {
+                    typeStr = rs.getString("msg_type");
+                    if (typeStr == null) typeStr = isGroup ? "GROUP_CHAT" : "PRIVATE_CHAT";
+                } catch (Exception ignore) { }
+                
+                MessageType type = MessageType.valueOf(typeStr);
+                String content = rs.getString("content");
+                
+                // Nạp payload từ file nếu là media
+                Object payload = null;
+                if (type == MessageType.SEND_FILE || type == MessageType.VOICE_MESSAGE || type == MessageType.WEBCAM_FRAME) {
+                    String filePath = content;
+                    if (type == MessageType.SEND_FILE && content.contains("|")) {
+                        String[] parts = content.split("\\|");
+                        content = parts[0];
+                        filePath = parts[1];
+                    }
+                    try {
+                        java.io.FileInputStream fis = new java.io.FileInputStream(filePath);
+                        java.io.ObjectInputStream ois = new java.io.ObjectInputStream(fis);
+                        payload = ois.readObject();
+                        ois.close();
+                        fis.close();
+                    } catch (Exception e) {
+                        System.out.println("Không tìm thấy file media: " + filePath);
+                    }
+                }
+                
+                Message msg = new Message(type, rs.getString("sender"), rs.getString("receiver"), content);
+                if (payload != null) {
+                    msg.setPayload(new Object[]{ rs.getInt("id"), payload });
+                } else {
+                    msg.setPayload(rs.getInt("id")); // Giữ lại logic cũ nếu ko có payload
+                }
                 history.add(msg);
             }
         } catch (Exception e) {

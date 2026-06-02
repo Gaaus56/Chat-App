@@ -264,82 +264,84 @@ public class MainChatController {
                         boolean isGroup = groupsList.contains(target);
                         for (Message hMsg : hist) {
                             boolean isMine = hMsg.getSender().equals(myUsername);
-                            int hMsgId = hMsg.getPayload() != null ? (Integer) hMsg.getPayload() : -1;
-                            String displayContent = hMsg.getContent();
-                            if (isGroup && !isMine) {
-                                displayContent = hMsg.getSender() + ": " + displayContent;
+                            int hMsgId = -1;
+                            Object rawPayload = hMsg.getPayload();
+                            Object actualPayload = rawPayload;
+                            if (rawPayload instanceof Object[]) {
+                                Object[] arr = (Object[]) rawPayload;
+                                if (arr.length == 2 && arr[0] instanceof Integer) {
+                                    hMsgId = (Integer) arr[0];
+                                    actualPayload = arr[1];
+                                }
+                            } else if (rawPayload instanceof Integer) {
+                                hMsgId = (Integer) rawPayload;
                             }
-                            addMessageBubble(targetChatBox, displayContent, isMine, hMsgId, target);
+                            
+                            if (hMsg.getType() == MessageType.PRIVATE_CHAT || hMsg.getType() == MessageType.GROUP_CHAT) {
+                                String displayContent = hMsg.getContent();
+                                if (isGroup && !isMine) {
+                                    displayContent = hMsg.getSender() + ": " + displayContent;
+                                }
+                                addMessageBubble(targetChatBox, displayContent, isMine, hMsgId, target);
+                            } else {
+                                Message fakeMsg = new Message(hMsg.getType(), hMsg.getSender(), hMsg.getReceiver(), hMsg.getContent());
+                                fakeMsg.setPayload(new Object[]{hMsgId, actualPayload});
+                                extractAndRenderMedia(hMsg.getType(), targetChatBox, fakeMsg, target, isMine);
+                            }
                         }
                     }
                     break;
                 case SEND_FILE:
-                    String targetFile = groupsList.contains(msg.getReceiver()) ? msg.getReceiver() : msg.getSender();
-                    handleIncomingMessage(targetFile, groupsList.contains(msg.getReceiver()));
-                    VBox boxFile = chatHistories.get(targetFile);
-                    if (boxFile != null) {
-                        String fileName = msg.getContent();
-                        byte[] fileBytes = (byte[]) msg.getPayload();
-                        
-                        Button btnDownload = new Button("📥 Tải xuống: " + fileName);
-                        btnDownload.setStyle("-fx-background-color: #f39c12; -fx-text-fill: white; -fx-cursor: hand; -fx-font-weight: bold;");
-                        btnDownload.setOnAction(e -> {
-                            FileChooser saveChooser = new FileChooser();
-                            saveChooser.setInitialFileName(fileName);
-                            File saveFile = saveChooser.showSaveDialog(tabPaneChats.getScene().getWindow());
-                            if (saveFile != null) {
-                                try (FileOutputStream fos = new FileOutputStream(saveFile)) {
-                                    fos.write(fileBytes);
-                                    Alert a = new Alert(Alert.AlertType.INFORMATION, "Đã tải xong file vào: " + saveFile.getAbsolutePath());
-                                    a.setHeaderText(null);
-                                    a.show();
-                                } catch (Exception ex) {
-                                    ex.printStackTrace();
-                                }
-                            }
-                        });
-                        
-                        HBox rowFile = new HBox(btnDownload);
-                        rowFile.setAlignment(Pos.CENTER_LEFT);
-                        boxFile.getChildren().add(rowFile);
-                    }
-                    break;
                 case VOICE_MESSAGE:
-                    String targetVoice = groupsList.contains(msg.getReceiver()) ? msg.getReceiver() : msg.getSender();
-                    handleIncomingMessage(targetVoice, groupsList.contains(msg.getReceiver()));
-                    VBox boxVoice = chatHistories.get(targetVoice);
-                    if (boxVoice != null) {
-                        byte[] voiceBytes = (byte[]) msg.getPayload();
-                        Button btnPlay = new Button("▶ Nghe tin nhắn thoại");
-                        btnPlay.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-cursor: hand; -fx-font-weight: bold; -fx-background-radius: 15;");
-                        btnPlay.setOnAction(e -> {
-                            com.chatapp.client.media.AudioPlayer.play(voiceBytes);
+                case WEBCAM_FRAME:
+                    String targetMedia = groupsList.contains(msg.getReceiver()) ? msg.getReceiver() : msg.getSender();
+                    if (msg.getSender().equals(myUsername)) {
+                        targetMedia = msg.getReceiver(); 
+                    }
+                    handleIncomingMessage(targetMedia, groupsList.contains(msg.getReceiver()));
+                    VBox boxMedia = chatHistories.get(targetMedia);
+                    if (boxMedia != null) {
+                        boolean isMineMedia = msg.getSender().equals(myUsername);
+                        final String finalTarget = targetMedia;
+                        javafx.application.Platform.runLater(() -> {
+                            extractAndRenderMedia(msg.getType(), boxMedia, msg, finalTarget, isMineMedia);
                         });
-                        HBox rowVoice = new HBox(btnPlay);
-                        rowVoice.setAlignment(Pos.CENTER_LEFT);
-                        boxVoice.getChildren().add(rowVoice);
                     }
                     break;
-                case WEBCAM_FRAME:
-                    String targetCam = groupsList.contains(msg.getReceiver()) ? msg.getReceiver() : msg.getSender();
-                    handleIncomingMessage(targetCam, groupsList.contains(msg.getReceiver()));
-                    VBox boxCam = chatHistories.get(targetCam);
-                    if (boxCam != null) {
-                        Object payload = msg.getPayload();
-                        boolean isMine = msg.getSender().equals(myUsername);
-                        javafx.application.Platform.runLater(() -> {
-                            if (payload instanceof byte[]) {
-                                renderPhotoBubble((byte[]) payload, boxCam, isMine, msg.getSender());
-                            } else if (payload instanceof java.util.List) {
-                                renderVideoBubble((java.util.List<byte[]>) payload, boxCam, isMine, msg.getSender());
-                            }
-                        });
+                case DELETE_MESSAGE:
+                    String chatPartnerDel = groupsList.contains(msg.getReceiver()) ? msg.getReceiver() : msg.getSender();
+                    if (!chatPartnerDel.equals(myUsername)) {
+                        clientCore.sendMessage(new Message(MessageType.GET_CHAT_HISTORY, myUsername, chatPartnerDel, ""));
                     }
                     break;
                 default:
                     break;
             }
         });
+    }
+
+    private void extractAndRenderMedia(MessageType type, VBox box, Message msg, String target, boolean isMine) {
+        int msgId = -1;
+        Object actualPayload = msg.getPayload();
+        if (actualPayload instanceof Object[]) {
+            Object[] arr = (Object[]) actualPayload;
+            if (arr.length == 2 && arr[0] instanceof Integer) {
+                msgId = (Integer) arr[0];
+                actualPayload = arr[1];
+            }
+        }
+        
+        if (type == MessageType.SEND_FILE) {
+            renderFileMessage(box, msg.getContent(), (byte[]) actualPayload, msgId, target, isMine);
+        } else if (type == MessageType.VOICE_MESSAGE) {
+            renderVoiceMessage(box, (byte[]) actualPayload, msgId, target, isMine);
+        } else if (type == MessageType.WEBCAM_FRAME) {
+            if (actualPayload instanceof byte[]) {
+                renderPhotoBubble((byte[]) actualPayload, box, isMine, msg.getSender(), msgId, target);
+            } else if (actualPayload instanceof java.util.List) {
+                renderVideoBubble((java.util.List<byte[]>) actualPayload, box, isMine, msg.getSender(), msgId, target);
+            }
+        }
     }
 
     private void handleIncomingMessage(String target, boolean isGroup) {
@@ -354,6 +356,59 @@ public class MainChatController {
             listAllUsers.refresh();
             listGroups.refresh();
         }
+    }
+    
+    private void addDeleteMenu(javafx.scene.Node row, VBox chatBox, int msgId, String targetUser, boolean isMine) {
+        if (isMine && msgId != -1) {
+            ContextMenu contextMenu = new ContextMenu();
+            MenuItem deleteItem = new MenuItem("Xóa tin nhắn");
+            deleteItem.setOnAction(e -> {
+                Message delMsg = new Message(MessageType.DELETE_MESSAGE, myUsername, targetUser, "");
+                delMsg.setPayload(msgId);
+                clientCore.sendMessage(delMsg);
+                chatBox.getChildren().remove(row);
+            });
+            contextMenu.getItems().add(deleteItem);
+            row.setOnContextMenuRequested(e -> contextMenu.show(row, e.getScreenX(), e.getScreenY()));
+        }
+    }
+    
+    private void renderFileMessage(VBox box, String fileName, byte[] fileBytes, int msgId, String targetUser, boolean isMine) {
+        if (fileBytes == null) return;
+        Button btnDownload = new Button("📥 Tải xuống: " + fileName);
+        btnDownload.setStyle("-fx-background-color: #f39c12; -fx-text-fill: white; -fx-cursor: hand; -fx-font-weight: bold;");
+        btnDownload.setOnAction(e -> {
+            FileChooser saveChooser = new FileChooser();
+            saveChooser.setInitialFileName(fileName);
+            File saveFile = saveChooser.showSaveDialog(tabPaneChats.getScene().getWindow());
+            if (saveFile != null) {
+                try (FileOutputStream fos = new FileOutputStream(saveFile)) {
+                    fos.write(fileBytes);
+                    Alert a = new Alert(Alert.AlertType.INFORMATION, "Đã tải xong file vào: " + saveFile.getAbsolutePath());
+                    a.setHeaderText(null);
+                    a.show();
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            }
+        });
+        HBox rowFile = new HBox(btnDownload);
+        rowFile.setAlignment(isMine ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
+        addDeleteMenu(rowFile, box, msgId, targetUser, isMine);
+        box.getChildren().add(rowFile);
+    }
+    
+    private void renderVoiceMessage(VBox box, byte[] voiceBytes, int msgId, String targetUser, boolean isMine) {
+        if (voiceBytes == null) return;
+        Button btnPlay = new Button("▶ Nghe tin nhắn thoại");
+        btnPlay.setStyle("-fx-background-color: #3498db; -fx-text-fill: white; -fx-cursor: hand; -fx-font-weight: bold; -fx-background-radius: 15;");
+        btnPlay.setOnAction(e -> {
+            com.chatapp.client.media.AudioPlayer.play(voiceBytes);
+        });
+        HBox rowVoice = new HBox(btnPlay);
+        rowVoice.setAlignment(isMine ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
+        addDeleteMenu(rowVoice, box, msgId, targetUser, isMine);
+        box.getChildren().add(rowVoice);
     }
 
     private void openChatTab(String target, boolean isGroup) {
@@ -479,7 +534,6 @@ public class MainChatController {
                     Message fileMsg = new Message(MessageType.SEND_FILE, myUsername, target, file.getName());
                     fileMsg.setPayload(fileBytes);
                     clientCore.sendMessage(fileMsg);
-                    addMessageBubble(chatBox, "Đã gửi file: " + file.getName(), true, -1, target);
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -511,17 +565,6 @@ public class MainChatController {
                     Message voiceMsg = new Message(MessageType.VOICE_MESSAGE, myUsername, target, "Tin nhắn thoại");
                     voiceMsg.setPayload(audioData);
                     clientCore.sendMessage(voiceMsg);
-                    
-                    // Hiện bong bóng Chat Audio của mình
-                    Button btnPlay = new Button("▶ Nghe tin nhắn thoại");
-                    btnPlay.setStyle("-fx-background-color: #0084ff; -fx-text-fill: white; -fx-cursor: hand; -fx-font-weight: bold; -fx-background-radius: 15; -fx-padding: 5 10;");
-                    btnPlay.setOnAction(e -> {
-                        com.chatapp.client.media.AudioPlayer.play(audioData);
-                    });
-                    HBox rowVoice = new HBox(btnPlay);
-                    rowVoice.setAlignment(Pos.CENTER_RIGHT);
-                    rowVoice.setPadding(new javafx.geometry.Insets(5, 5, 5, 50));
-                    chatBox.getChildren().add(rowVoice);
                 }
             }
         });
@@ -539,7 +582,6 @@ public class MainChatController {
                         Message camMsg = new Message(MessageType.WEBCAM_FRAME, myUsername, target, "Đã gửi một ảnh");
                         camMsg.setPayload(photoBytes);
                         clientCore.sendMessage(camMsg);
-                        javafx.application.Platform.runLater(() -> renderPhotoBubble(photoBytes, chatBox, true, myUsername));
                     }
                 } else if (media instanceof java.util.List) {
                     @SuppressWarnings("unchecked")
@@ -548,7 +590,6 @@ public class MainChatController {
                         Message camMsg = new Message(MessageType.WEBCAM_FRAME, myUsername, target, "Đã gửi một video");
                         camMsg.setPayload(videoFrames);
                         clientCore.sendMessage(camMsg);
-                        javafx.application.Platform.runLater(() -> renderVideoBubble(videoFrames, chatBox, true, myUsername));
                     }
                 }
             });
@@ -583,7 +624,7 @@ public class MainChatController {
         clientCore.sendMessage(new Message(MessageType.GET_CHAT_HISTORY, myUsername, target, ""));
     }
     
-    private void renderPhotoBubble(byte[] photoBytes, VBox chatBox, boolean isMine, String senderName) {
+    private void renderPhotoBubble(byte[] photoBytes, VBox chatBox, boolean isMine, String senderName, int msgId, String targetUser) {
         try {
             java.io.ByteArrayInputStream bis = new java.io.ByteArrayInputStream(photoBytes);
             javafx.scene.image.Image img = new javafx.scene.image.Image(bis);
@@ -592,7 +633,11 @@ public class MainChatController {
             iv.setPreserveRatio(true);
             iv.setStyle("-fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 5, 0, 0, 0); -fx-cursor: hand;");
             
-            iv.setOnMouseClicked(e -> showMediaViewer(photoBytes, null));
+            iv.setOnMouseClicked(e -> {
+                if (e.getButton() == javafx.scene.input.MouseButton.PRIMARY) {
+                    showMediaViewer(photoBytes, null);
+                }
+            });
             
             VBox wrapper = new VBox(2);
             wrapper.setAlignment(isMine ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
@@ -606,11 +651,12 @@ public class MainChatController {
             HBox rowImg = new HBox(wrapper);
             rowImg.setAlignment(isMine ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
             if (isMine) rowImg.setPadding(new javafx.geometry.Insets(5, 5, 5, 50));
+            addDeleteMenu(rowImg, chatBox, msgId, targetUser, isMine);
             chatBox.getChildren().add(rowImg);
         } catch(Exception e) {}
     }
 
-    private void renderVideoBubble(java.util.List<byte[]> frames, VBox chatBox, boolean isMine, String senderName) {
+    private void renderVideoBubble(java.util.List<byte[]> frames, VBox chatBox, boolean isMine, String senderName, int msgId, String targetUser) {
         if (frames == null || frames.isEmpty()) return;
         try {
             // Lấy frame đầu tiên làm thumbnail
@@ -620,7 +666,11 @@ public class MainChatController {
             iv.setFitWidth(200);
             iv.setPreserveRatio(true);
             iv.setStyle("-fx-cursor: hand;");
-            iv.setOnMouseClicked(e -> showMediaViewer(null, frames));
+            iv.setOnMouseClicked(e -> {
+                if (e.getButton() == javafx.scene.input.MouseButton.PRIMARY) {
+                    showMediaViewer(null, frames);
+                }
+            });
             
             javafx.scene.layout.StackPane sp = new javafx.scene.layout.StackPane(iv);
             Button btnPlay = new Button("▶");
@@ -659,6 +709,7 @@ public class MainChatController {
             HBox rowImg = new HBox(wrapper);
             rowImg.setAlignment(isMine ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
             if (isMine) rowImg.setPadding(new javafx.geometry.Insets(5, 5, 5, 50));
+            addDeleteMenu(rowImg, chatBox, msgId, targetUser, isMine);
             chatBox.getChildren().add(rowImg);
         } catch(Exception e) {}
     }
@@ -792,22 +843,19 @@ public class MainChatController {
         HBox row = new HBox(bubble);
         row.setAlignment(isMine ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
         
-        // Menu xóa dòng lịch sử (ContextMenu)
-        ContextMenu contextMenu = new ContextMenu();
-        MenuItem deleteItem = new MenuItem("Xóa dòng lịch sử chat");
-        deleteItem.setOnAction(e -> {
-            if (msgId != -1) {
+        // Menu xóa dòng lịch sử (ContextMenu) chỉ cho phép xóa tin của mình
+        if (isMine && msgId != -1) {
+            ContextMenu contextMenu = new ContextMenu();
+            MenuItem deleteItem = new MenuItem("Xóa tin nhắn");
+            deleteItem.setOnAction(e -> {
                 Message delMsg = new Message(MessageType.DELETE_MESSAGE, myUsername, targetUser, "");
                 delMsg.setPayload(msgId);
                 clientCore.sendMessage(delMsg);
-            }
-            chatBox.getChildren().remove(row);
-        });
-        contextMenu.getItems().add(deleteItem);
-        
-        row.setOnContextMenuRequested(e -> {
-            contextMenu.show(row, e.getScreenX(), e.getScreenY());
-        });
+                chatBox.getChildren().remove(row);
+            });
+            contextMenu.getItems().add(deleteItem);
+            row.setOnContextMenuRequested(e -> contextMenu.show(row, e.getScreenX(), e.getScreenY()));
+        }
         
         // Hiệu ứng Fade In (mượt mà)
         row.setOpacity(0.0);

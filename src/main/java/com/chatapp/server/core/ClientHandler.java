@@ -113,7 +113,7 @@ public class ClientHandler implements Runnable {
         }
         else if (msg.getType() == MessageType.PRIVATE_CHAT) {
             String receiver = msg.getReceiver();
-            int msgId = MessageDAO.saveMessage(msg.getSender(), receiver, msg.getContent());
+            int msgId = MessageDAO.saveMessage(msg.getSender(), receiver, msg.getContent(), msg.getType());
             msg.setPayload(msgId);
             
             ClientHandler receiverHandler = serverCore.clients.get(receiver);
@@ -138,19 +138,43 @@ public class ClientHandler implements Runnable {
         }
         else if (msg.getType() == MessageType.SEND_FILE || msg.getType() == MessageType.VOICE_MESSAGE || msg.getType() == MessageType.WEBCAM_FRAME) {
             String receiver = msg.getReceiver();
+            
+            // LƯU FILE RA Ổ CỨNG SERVER
+            String fileName = "media_" + System.currentTimeMillis() + ".dat";
+            String filePath = "server_media/" + fileName;
+            try {
+                java.io.FileOutputStream fos = new java.io.FileOutputStream(filePath);
+                java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(fos);
+                oos.writeObject(msg.getPayload());
+                oos.close();
+                fos.close();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            
+            // LƯU ĐƯỜNG DẪN VÀO DB
+            // Đối với SEND_FILE, msg.getContent() chứa tên file gốc, ta gộp lại: originalName|filePath
+            String dbContent = msg.getContent();
+            if (msg.getType() == MessageType.SEND_FILE) {
+                dbContent = msg.getContent() + "|" + filePath;
+            } else {
+                dbContent = filePath;
+            }
+            int msgId = MessageDAO.saveMessage(username, receiver, dbContent, msg.getType());
+            msg.setPayload(new Object[]{ msgId, msg.getPayload() }); 
+            
             if (serverCore.groups.containsKey(receiver)) {
                 List<String> members = serverCore.groups.get(receiver);
                 for (String member : members) {
-                    if (!member.equals(username)) {
-                        ClientHandler handler = serverCore.clients.get(member);
-                        if (handler != null) handler.sendMessage(msg);
-                    }
+                    ClientHandler handler = serverCore.clients.get(member);
+                    if (handler != null) handler.sendMessage(msg);
                 }
             } else {
                 ClientHandler receiverHandler = serverCore.clients.get(receiver);
                 if (receiverHandler != null) {
                     receiverHandler.sendMessage(msg);
                 }
+                sendMessage(msg);
             }
         }
         else if (msg.getType() == MessageType.CREATE_GROUP) {
@@ -161,7 +185,7 @@ public class ClientHandler implements Runnable {
         }
         else if (msg.getType() == MessageType.GROUP_CHAT) {
             String groupName = msg.getReceiver();
-            int msgId = com.chatapp.server.dao.MessageDAO.saveMessage(msg.getSender(), groupName, msg.getContent());
+            int msgId = com.chatapp.server.dao.MessageDAO.saveMessage(msg.getSender(), groupName, msg.getContent(), msg.getType());
             msg.setPayload(msgId);
             
             List<String> members = serverCore.groups.get(groupName);
@@ -235,6 +259,20 @@ public class ClientHandler implements Runnable {
         else if (msg.getType() == MessageType.DELETE_MESSAGE) {
             int msgId = (Integer) msg.getPayload();
             MessageDAO.deleteMessage(msgId);
+            
+            String receiver = msg.getReceiver();
+            if (serverCore.groups.containsKey(receiver)) {
+                List<String> members = serverCore.groups.get(receiver);
+                for (String member : members) {
+                    if (!member.equals(username)) {
+                        ClientHandler handler = serverCore.clients.get(member);
+                        if (handler != null) handler.sendMessage(msg);
+                    }
+                }
+            } else {
+                ClientHandler receiverHandler = serverCore.clients.get(receiver);
+                if (receiverHandler != null) receiverHandler.sendMessage(msg);
+            }
         }
         else if (msg.getType() == MessageType.LOGOUT) {
             closeConnection();
