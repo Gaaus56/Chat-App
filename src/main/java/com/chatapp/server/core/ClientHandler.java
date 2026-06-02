@@ -143,6 +143,10 @@ public class ClientHandler implements Runnable {
             String fileName = "media_" + System.currentTimeMillis() + ".dat";
             String filePath = "server_media/" + fileName;
             try {
+                java.io.File dir = new java.io.File("server_media");
+                if (!dir.exists()) {
+                    dir.mkdirs();
+                }
                 java.io.FileOutputStream fos = new java.io.FileOutputStream(filePath);
                 java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(fos);
                 oos.writeObject(msg.getPayload());
