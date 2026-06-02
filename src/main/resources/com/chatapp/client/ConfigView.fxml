@@ -20,9 +20,9 @@
                 <TextField fx:id="txtPort" promptText="Port" prefWidth="70"/>
             </HBox>
             <HBox spacing="10" alignment="CENTER">
-                <Button text="➕ Thêm" onAction="#handleAdd" style="-fx-background-color: #3498db; -fx-text-fill: white; -fx-cursor: hand;"/>
-                <Button text="✏️ Sửa" onAction="#handleEdit" style="-fx-background-color: #f39c12; -fx-text-fill: white; -fx-cursor: hand;"/>
-                <Button text="🗑 Xóa" onAction="#handleDelete" style="-fx-background-color: #e74c3c; -fx-text-fill: white; -fx-cursor: hand;"/>
+                <Button text="Thêm" onAction="#handleAdd" style="-fx-background-color: #3498db; -fx-text-fill: white; -fx-cursor: hand;"/>
+                <Button text="Sửa" onAction="#handleEdit" style="-fx-background-color: #f39c12; -fx-text-fill: white; -fx-cursor: hand;"/>
+                <Button text="Xóa" onAction="#handleDelete" style="-fx-background-color: #e74c3c; -fx-text-fill: white; -fx-cursor: hand;"/>
             </HBox>
         </VBox>
     </center>

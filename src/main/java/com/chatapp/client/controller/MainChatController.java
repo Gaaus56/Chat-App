@@ -108,8 +108,15 @@ public class MainChatController {
         listAllUsers.setCellFactory(cellFactory);
         listGroups.setCellFactory(cellFactory);
         
-        // Nhận gói tin mới cho Màn hình Chat
+        // Cấu hình sự kiện nhận tin nhắn và mất kết nối
         clientCore.setOnMessageReceived(this::handleServerMessage);
+        clientCore.setOnDisconnected(() -> {
+            javafx.application.Platform.runLater(() -> {
+                Alert alert = new Alert(Alert.AlertType.ERROR, "Đã mất kết nối tới Server!");
+                alert.showAndWait();
+                handleLogout(); // Hàm handleLogout đã có logic chuyển về ConfigView
+            });
+        });
         
         // Yêu cầu tải danh sách user
         clientCore.sendMessage(new Message(MessageType.GET_ONLINE_USERS));
@@ -1010,7 +1017,10 @@ public class MainChatController {
 
     @FXML
     private void handleLogout() {
-        clientCore.sendMessage(new Message(MessageType.LOGOUT));
+        if (clientCore != null) {
+            clientCore.sendMessage(new Message(MessageType.LOGOUT));
+            clientCore.closeConnection();
+        }
         try {
             FXMLLoader loader = new FXMLLoader(getClass().getResource("/com/chatapp/client/ConfigView.fxml"));
             Parent root = loader.load();

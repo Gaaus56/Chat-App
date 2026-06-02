@@ -25,6 +25,9 @@ public class ServerCore implements Runnable {
     
     // Quản lý các nhóm (Tên nhóm -> Danh sách thành viên)
     public ConcurrentHashMap<String, List<String>> groups = new ConcurrentHashMap<>();
+    
+    // Lưu tất cả kết nối để đóng khi Server tắt (kể cả chưa login)
+    private java.util.Set<ClientHandler> allConnections = ConcurrentHashMap.newKeySet();
 
     public ServerCore(int port, ServerController controller) {
         this.port = port;
@@ -51,6 +54,7 @@ public class ServerCore implements Runnable {
                 controller.addClientToTable(ip, "Unknown", time);
                 
                 ClientHandler handler = new ClientHandler(clientSocket, this, ip, controller);
+                allConnections.add(handler);
                 new Thread(handler).start();
             }
         } catch (IOException e) {
@@ -63,9 +67,11 @@ public class ServerCore implements Runnable {
     public void stopServer() {
         isRunning = false;
         try {
-            for (ClientHandler handler : clients.values()) {
+            // Đóng TẤT CẢ kết nối đang mở
+            for (ClientHandler handler : allConnections) {
                 handler.closeConnection();
             }
+            allConnections.clear();
             clients.clear();
             if (serverSocket != null) {
                 serverSocket.close();
@@ -81,7 +87,10 @@ public class ServerCore implements Runnable {
         broadcastOnlineUsers();
     }
     
-    public void removeClient(String username) {
+    public void removeClient(String username, ClientHandler handler) {
+        if (handler != null) {
+            allConnections.remove(handler);
+        }
         if (username != null) {
             clients.remove(username);
             controller.removeClientFromTable(username);

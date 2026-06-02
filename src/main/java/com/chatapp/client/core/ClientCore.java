@@ -12,6 +12,9 @@ public class ClientCore {
     private ObjectInputStream in;
     private Consumer<Message> onMessageReceived;
     
+    private Runnable onDisconnected;
+    private boolean isVoluntaryClose = false;
+    
     public ClientCore(String ip, int port) throws Exception {
         socket = new Socket(ip, port);
         out = new ObjectOutputStream(socket.getOutputStream());
@@ -26,7 +29,12 @@ public class ClientCore {
                     }
                 }
             } catch (Exception e) {
-                System.out.println("Đã ngắt kết nối với server");
+                if (!isVoluntaryClose) {
+                    System.out.println("Đã ngắt kết nối với server");
+                    if (onDisconnected != null) {
+                        onDisconnected.run();
+                    }
+                }
             }
         });
         listenThread.setDaemon(true); // Đảm bảo thread tắt khi tắt app
@@ -35,6 +43,21 @@ public class ClientCore {
     
     public void setOnMessageReceived(Consumer<Message> callback) {
         this.onMessageReceived = callback;
+    }
+    
+    public void setOnDisconnected(Runnable onDisconnected) {
+        this.onDisconnected = onDisconnected;
+    }
+    
+    public void closeConnection() {
+        isVoluntaryClose = true;
+        try {
+            if (in != null) in.close();
+            if (out != null) out.close();
+            if (socket != null) socket.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
     
     public void sendMessage(Message msg) {

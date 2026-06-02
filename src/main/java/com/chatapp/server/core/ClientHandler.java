@@ -255,8 +255,8 @@ public class ClientHandler implements Runnable {
     public void closeConnection() {
         if (username != null) {
             userDAO.updateLogoutTime(username);
-            serverCore.removeClient(username);
         }
+        serverCore.removeClient(username, this);
         try {
             if (in != null) in.close();
             if (out != null) out.close();

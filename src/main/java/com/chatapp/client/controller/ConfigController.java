@@ -89,11 +89,13 @@ public class ConfigController {
             Parent root = loader.load();
             
             LoginController controller = loader.getController();
-            controller.initData(selected);
+            boolean success = controller.initData(selected);
             
-            Stage stage = (Stage) listServers.getScene().getWindow();
-            stage.setTitle("Đăng nhập - " + selected.name);
-            stage.setScene(new Scene(root));
+            if (success) {
+                Stage stage = (Stage) listServers.getScene().getWindow();
+                stage.setTitle("Đăng nhập - " + selected.name);
+                stage.setScene(new Scene(root));
+            }
         } catch (Exception e) {
             e.printStackTrace();
             showAlert("Lỗi", "Không thể mở giao diện Đăng nhập.");
